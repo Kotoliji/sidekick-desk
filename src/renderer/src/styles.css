@@ -5,7 +5,7 @@
 
 :root,
 [data-theme='aurora'] {
-  --bg: #07060d;
+  --bg: rgba(10, 8, 20, 0.62);
   --surface: rgba(255, 255, 255, 0.045);
   --surface-strong: rgba(255, 255, 255, 0.08);
   --border: rgba(255, 255, 255, 0.09);
@@ -18,7 +18,6 @@
   --user-bubble: rgba(164, 139, 255, 0.16);
   --radius: 16px;
   --radius-sm: 10px;
-  --blur: blur(18px) saturate(140%);
   --font-ui: 'Geist', system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
   --font-brand: 'Instrument Serif', Georgia, serif;
@@ -42,7 +41,6 @@
   --user-bubble: #1a1f27;
   --radius: 6px;
   --radius-sm: 4px;
-  --blur: none;
   --font-ui: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --font-brand: 'JetBrains Mono', ui-monospace, monospace;
@@ -66,6 +64,7 @@ body,
 }
 
 body {
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font: 14px/1.6 var(--font-ui);
@@ -110,61 +109,54 @@ button {
   cursor: pointer;
 }
 
-/* ── Layout ─────────────────────────────────────────────────────────── */
+/* ── Window chrome ──────────────────────────────────────────────────
+   Frameless window: the tile header is the title bar. */
 
-.app {
-  height: 100%;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 12px;
-  padding: 12px 16px 16px;
-}
-
-.topbar {
+.win-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 40px;
+  gap: 4px;
+  margin-left: 6px;
+  -webkit-app-region: no-drag;
 }
 
-.brand {
-  font-family: var(--font-brand);
-  font-size: 22px;
-  letter-spacing: var(--head-track);
-  text-transform: var(--head-case);
+.win-btn {
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  transition: background var(--dur) var(--ease), color var(--dur);
 }
 
-[data-theme='hud'] .brand {
-  font-size: 14px;
-  font-weight: 500;
+.win-btn:hover {
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
-.brand-mark {
-  color: var(--accent);
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.win-close:hover {
+  background: var(--alert);
+  color: #fff;
 }
 
 .theme-toggle {
   display: inline-flex;
-  padding: 3px;
+  margin-right: 6px;
+  padding: 2px;
   gap: 2px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  backdrop-filter: var(--blur);
-  font: 500 11px/1 var(--font-mono);
+  font: 500 10px/1 var(--font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .theme-toggle span {
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-radius: 999px;
   color: var(--muted);
   transition: all var(--dur) var(--ease);
@@ -172,26 +164,16 @@ button {
 
 .theme-toggle span.on {
   background: var(--accent);
-  color: var(--bg);
-}
-
-.stage {
-  min-height: 0;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr);
+  color: #0b0d10;
 }
 
 /* ── Tile ───────────────────────────────────────────────────────────── */
 
 .tile {
-  min-height: 0;
+  height: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  backdrop-filter: var(--blur);
   overflow: hidden;
   transition:
     border-color var(--dur) var(--ease),
@@ -207,10 +189,12 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 38px;
-  padding: 0 14px;
+  height: 40px;
+  padding: 0 6px 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-strong);
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .tile-title {

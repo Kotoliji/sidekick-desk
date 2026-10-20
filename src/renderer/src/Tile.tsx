@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { Tile as TileState } from './deck';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import type { TileState } from './deck';
 
 const STATUS_LABEL = { idle: 'idle', thinking: 'thinking', streaming: 'streaming', error: 'error' } as const;
 
@@ -7,9 +7,11 @@ interface Props {
   tile: TileState;
   onSend: (text: string) => void;
   onInterrupt: () => void;
+  /** Window controls rendered at the right end of the header (the header doubles as the title bar). */
+  actions?: ReactNode;
 }
 
-export function Tile({ tile, onSend, onInterrupt }: Props) {
+export function Tile({ tile, onSend, onInterrupt, actions }: Props) {
   const [draft, setDraft] = useState('');
   const log = useRef<HTMLDivElement>(null);
   const busy = tile.status === 'thinking' || tile.status === 'streaming';
@@ -43,6 +45,7 @@ export function Tile({ tile, onSend, onInterrupt }: Props) {
           {STATUS_LABEL[tile.status]}
           {tile.lastMs != null && !busy && ` · ${(tile.lastMs / 1000).toFixed(1)}s`}
         </span>
+        {actions}
       </header>
 
       <div className="tile-log" ref={log}>

@@ -2,31 +2,30 @@
   "name": "tiledeck",
   "version": "0.1.0",
   "scripts": {
-    "dev": "concurrently -k -n server,web -c cyan,magenta \"node --watch --import tsx server/index.ts\" \"vite\"",
-    "server": "node --import tsx server/index.ts",
-    "build": "vite build",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
     "typecheck": "tsc --noEmit"
   },
   "author": "Mugivara <kirill30082005@gmail.com>",
   "license": "MIT",
-  "description": "A calm cockpit for parallel Claude sessions: chat tiles, focus mode, music.",
+  "description": "A calm cockpit for parallel Claude sessions on your desktop: each chat is its own window, auto-tiled.",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.304",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "ws": "^8.22.0"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.7.0",
-    "concurrently": "^10.0.6",
-    "tsx": "^4.23.15",
+    "electron": "^39.8.10",
+    "electron-vite": "^3.1.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.4"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "main": "./out/main/index.js"
 }

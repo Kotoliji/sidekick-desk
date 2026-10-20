@@ -1,5 +1,5 @@
 import { query, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { TileEvent } from '../shared/protocol.ts';
+import type { TileEvent } from '../shared/protocol';
 
 /** Async queue of user messages: the session's prompt stream, kept open between turns. */
 class Inbox implements AsyncIterable<SDKUserMessage> {
