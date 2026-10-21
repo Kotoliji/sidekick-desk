@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { PetNote, TileStatus } from '../../shared/protocol';
-import { NOTE_HINT, NOTE_ICON } from './notes';
+import { NOTE_ICON } from './notes';
 import { frame, PALETTE, SPRITE_H, SPRITE_W } from './octopus';
 
 // A chat waiting on the user matters more than a finished answer, so it stays up longer.
@@ -115,10 +115,11 @@ export function Pet() {
           <button
             className="bubble-body"
             onClick={() => {
-              setNotes((q) => q.slice(1));
-              window.sidekick.openNote(current.id);
+              // The chat keeps every note as a card, so clear them all and show it there.
+              setNotes([]);
+              window.sidekick.showPanel();
             }}
-            title={NOTE_HINT[current.kind]}
+            title="Open the chat"
           >
             <span className="bubble-title">
               {NOTE_ICON[current.kind]}

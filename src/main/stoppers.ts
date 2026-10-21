@@ -12,11 +12,20 @@ export interface StopperConfig {
   longChatTokens: number;
 }
 
+/** Which chat an alert is about, so the user can be taken back to it. */
+export interface ChatRef {
+  agent: 'claude' | 'codex';
+  cwd: string;
+  session: string;
+  transcript?: string;
+}
+
 export type Alert =
-  | { type: 'waiting-long'; cwd: string; minutes: number; reason: 'answer' | 'permission' }
-  | { type: 'long-chat'; cwd: string; transcript: string; tokens: number };
+  | ({ type: 'waiting-long'; minutes: number; reason: 'answer' | 'permission' } & ChatRef)
+  | ({ type: 'long-chat'; tokens: number } & ChatRef & { transcript: string });
 
 interface Chat {
+  agent: ChatRef['agent'];
   cwd: string;
   transcript?: string;
   waitingSince?: number;
@@ -35,7 +44,7 @@ export class Stoppers {
   ) {}
 
   onEvent(e: BridgeEvent) {
-    const chat = this.chats.get(e.session) ?? { cwd: e.cwd, reason: 'answer', reminded: false, warnedAt: 0 };
+    const chat: Chat = this.chats.get(e.session) ?? { agent: e.agent ?? 'claude', cwd: e.cwd, reason: 'answer', reminded: false, warnedAt: 0 };
     chat.cwd = e.cwd;
     if (e.transcript) chat.transcript = e.transcript;
     this.chats.set(e.session, chat);
@@ -44,7 +53,7 @@ export class Stoppers {
       chat.waitingSince = undefined; // the user is back in this chat
     } else if (e.event === 'Stop') {
       this.wait(chat, e.ts, 'answer');
-      this.checkLength(chat);
+      this.checkLength(chat, e.session);
     } else if (e.event === 'Notification' && e.type === 'permission_prompt') {
       this.wait(chat, e.ts, 'permission');
     }
@@ -53,10 +62,11 @@ export class Stoppers {
   /** Call periodically; raises at most one reminder per wait. */
   tick(now = Date.now()) {
     const after = this.config().remindAfterMinutes * 60_000;
-    for (const chat of this.chats.values()) {
+    for (const [session, chat] of this.chats) {
       if (chat.waitingSince === undefined || chat.reminded || now - chat.waitingSince < after) continue;
       chat.reminded = true;
-      this.alert({ type: 'waiting-long', cwd: chat.cwd, minutes: Math.max(1, Math.round((now - chat.waitingSince) / 60_000)), reason: chat.reason });
+      const minutes = Math.max(1, Math.round((now - chat.waitingSince) / 60_000));
+      this.alert({ type: 'waiting-long', minutes, reason: chat.reason, agent: chat.agent, cwd: chat.cwd, session, transcript: chat.transcript });
     }
   }
 
@@ -66,7 +76,7 @@ export class Stoppers {
     chat.reminded = false;
   }
 
-  private checkLength(chat: Chat) {
+  private checkLength(chat: Chat, session: string) {
     if (!chat.transcript) return;
     const tokens = conversationTokens(chat.transcript);
     const limit = this.config().longChatTokens;
@@ -74,6 +84,6 @@ export class Stoppers {
     // Warn when crossing the limit, then again after every further half-limit of growth.
     if (chat.warnedAt && tokens < chat.warnedAt + limit / 2) return;
     chat.warnedAt = tokens;
-    this.alert({ type: 'long-chat', cwd: chat.cwd, transcript: chat.transcript, tokens });
+    this.alert({ type: 'long-chat', tokens, agent: chat.agent, cwd: chat.cwd, session, transcript: chat.transcript });
   }
 }

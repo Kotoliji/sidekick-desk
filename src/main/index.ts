@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeGuardSettings, writeHookScript, type BridgeEvent } from './hooks';
 import { Session } from './session';
-import { Stoppers, type Alert } from './stoppers';
-import { recentTurns } from './transcript';
+import { Stoppers, type Alert, type ChatRef } from './stoppers';
+import { recentTurns, sessionInfo } from './transcript';
 import { dayKey, ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt, resumeKickoff, wrapUpPrompt } from './workspace';
 import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
 
@@ -65,7 +65,9 @@ let panel: BrowserWindow;
 let session: Session;
 let noteId = 0;
 /** What clicking a bubble does, for bubbles that are about a Claude Code chat. */
-type NoteAction = { type: 'vscode'; folder: string } | { type: 'handoff'; cwd: string; transcript: string; tokens: number };
+/** A chat's home: the VS Code window (by the folder it was opened on) and, when known, its tab. */
+type ChatTarget = { type: 'chat'; agent: ChatRef['agent']; folder: string; session?: string };
+type NoteAction = ChatTarget | { type: 'handoff'; cwd: string; transcript: string; tokens: number };
 const noteActions = new Map<number, NoteAction>();
 
 function createPet() {
@@ -179,14 +181,29 @@ function handoff(a: Extract<NoteAction, { type: 'handoff' }>) {
   reveal(panel);
 }
 
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/**
+ * Find a chat's window and tab, and a label that tells apart several chats in one project:
+ * "PROJECT · tab title". The window is the folder the chat started in (VS Code's workspace).
+ */
+function locate(ref: ChatRef): { label: string; target: ChatTarget } {
+  const info = ref.transcript ? sessionInfo(ref.transcript) : { inVSCode: false, root: undefined, title: undefined };
+  const root = info.root ?? ref.cwd;
+  return {
+    label: info.title ? `${basename(root)} · ${clip(info.title, 32)}` : basename(root),
+    target: { type: 'chat', agent: ref.agent, folder: root, session: info.inVSCode ? ref.session : undefined },
+  };
+}
+
 function onAlert(a: Alert) {
-  const project = basename(a.cwd);
+  const { label, target } = locate(a);
   if (a.type === 'waiting-long') {
     const text = a.reason === 'permission' ? `Still waiting for your permission (${a.minutes} min)` : `Its answer has been waiting for you ${a.minutes} min`;
-    notify('waiting', project, text, { type: 'vscode', folder: a.cwd });
+    notify('waiting', label, text, target);
   } else {
     const k = Math.round(a.tokens / 1000);
-    notify('long', project, `This chat's conversation has grown by ~${k}k tokens. Click for a summary and a prompt to continue in a fresh chat.`, {
+    notify('long', label, `This chat's conversation has grown by ~${k}k tokens. Click for a summary and a prompt to continue in a fresh chat.`, {
       type: 'handoff',
       cwd: a.cwd,
       transcript: a.transcript,
@@ -195,23 +212,38 @@ function onAlert(a: Alert) {
   }
 }
 
-/** Bring up the VS Code window for a project (falls back to Explorer without the `code` CLI). */
-function openInVSCode(folder: string) {
-  if (HIDDEN) return console.log(`[hidden] open in VS Code ${folder}`);
-  const child = spawn('code', [`"${folder}"`], { shell: true, detached: true, stdio: 'ignore', windowsHide: true });
-  child.on('exit', (code) => code && void shell.openPath(folder));
+/** Deep links the assistants' VS Code extensions handle: open (or bring forward) one chat as a tab. */
+const TAB_URI = {
+  claude: (id: string) => `vscode://anthropic.claude-code/open?session=${encodeURIComponent(id)}`,
+  codex: (id: string) => `vscode://openai.chatgpt/local/${encodeURIComponent(id)}`,
+};
+
+/**
+ * Take the user back to a chat. `code <folder>` focuses the window that has the folder open
+ * (or opens one if it was closed); the extension link then shows that chat's tab in it.
+ */
+function openChat(t: ChatTarget) {
+  const uri = t.session && TAB_URI[t.agent](t.session);
+  if (HIDDEN) return console.log(`[hidden] open in VS Code ${t.folder}${uri ? ` then ${uri}` : ''}`);
+  const child = spawn('code', [`"${t.folder}"`], { shell: true, detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('exit', (code) => {
+    if (code) return void shell.openPath(t.folder); // no `code` CLI: at least show the folder
+    // Links go to the last active window, so wait for the right one to come forward.
+    if (uri) setTimeout(() => void shell.openExternal(uri), 700);
+  });
   child.unref();
 }
 
 function onBridgeEvent(e: BridgeEvent, dir: string, stoppers: Stoppers) {
   if (!e.cwd || resolve(e.cwd) === resolve(dir)) return; // Sidekick's own session
-  const project = basename(e.cwd);
-  const open: NoteAction = { type: 'vscode', folder: e.cwd };
-  if (e.event === 'Stop') notify('done', project, e.last ? summarize(e.last, 140) : 'Answer ready', open);
-  // idle_prompt repeats a Stop a minute later; only real requests get a bubble.
-  else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', project, e.message ?? 'Needs you', open);
-  else if (e.event === 'Conflict')
-    notify('conflict', project, `Stopped an edit of ${basename(e.file ?? '')}: the chat in ${basename(e.other ?? '')} edited it minutes ago.`, open);
+  if (e.event !== 'UserPromptSubmit') {
+    const { label, target } = locate({ agent: e.agent ?? 'claude', cwd: e.cwd, session: e.session, transcript: e.transcript });
+    if (e.event === 'Stop') notify('done', label, e.last ? summarize(e.last, 140) : 'Answer ready', target);
+    // idle_prompt repeats a Stop a minute later; only real requests get a bubble.
+    else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', label, e.message ?? 'Needs you', target);
+    else if (e.event === 'Conflict')
+      notify('conflict', label, `Stopped an edit of ${basename(e.file ?? '')}: the chat in ${basename(e.other ?? '')} edited it minutes ago.`, target);
+  }
   stoppers.onEvent(e);
 }
 
@@ -357,9 +389,13 @@ else {
     });
     ipcMain.on(IPC.interactive, (_e, on: boolean) => pet.setIgnoreMouseEvents(!on, { forward: true }));
     ipcMain.on(IPC.togglePanel, () => togglePanel());
+    ipcMain.on(IPC.showPanel, () => {
+      if (!panel.isVisible()) placePanel();
+      reveal(panel);
+    });
     ipcMain.on(IPC.openNote, (_e, id: number) => {
       const action = noteActions.get(id);
-      if (action?.type === 'vscode') openInVSCode(action.folder);
+      if (action?.type === 'chat') openChat(action);
       else if (action?.type === 'handoff') handoff(action);
       else togglePanel();
     });

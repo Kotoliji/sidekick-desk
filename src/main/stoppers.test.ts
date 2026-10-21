@@ -20,7 +20,7 @@ test('reminds once when an answer waits too long', () => {
   assert.equal(alerts.length, 0);
   stoppers.tick(11 * MIN);
   stoppers.tick(30 * MIN);
-  assert.deepEqual(alerts, [{ type: 'waiting-long', cwd: 'D:/p/a', minutes: 11, reason: 'answer' }]);
+  assert.deepEqual(alerts, [{ type: 'waiting-long', minutes: 11, reason: 'answer', agent: 'claude', cwd: 'D:/p/a', session: 'a', transcript: undefined }]);
 });
 
 test('the user writing in the chat cancels the reminder', () => {

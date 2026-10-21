@@ -7,6 +7,9 @@ import { closeSync, openSync, readSync, statSync } from 'node:fs';
 interface Line {
   type?: string;
   isSidechain?: boolean;
+  cwd?: string;
+  entrypoint?: string;
+  aiTitle?: string;
   message?: {
     content?: string | { type: string; text?: string }[];
     usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
@@ -31,6 +34,27 @@ function readLines(path: string, bytes: number, fromEnd = true): Line[] {
       return [];
     }
   });
+}
+
+export interface SessionInfo {
+  /** Folder the chat started in: the VS Code window's workspace, even if the chat later cd'ed elsewhere. */
+  root?: string;
+  /** Started from the VS Code extension (so it can be reopened there as a tab). */
+  inVSCode: boolean;
+  /** The chat's tab title (Claude Code's generated title). */
+  title?: string;
+}
+
+export function sessionInfo(path: string): SessionInfo {
+  try {
+    const head = readLines(path, 64_000, false);
+    const first = head.find((l) => l.cwd);
+    // Latest title wins: search from the end of the file back.
+    const title = [...head, ...readLines(path, 256_000)].reverse().find((l) => l.type === 'ai-title')?.aiTitle;
+    return { root: first?.cwd, inVSCode: first?.entrypoint === 'claude-vscode', title };
+  } catch {
+    return { inVSCode: false };
+  }
 }
 
 const contextOf = (l: Line) => {

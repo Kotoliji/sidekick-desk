@@ -32,6 +32,8 @@ const HOOKS: { event: string; matcher?: string }[] = [
 /** One line of events.jsonl. */
 export interface BridgeEvent {
   ts: number;
+  /** Which assistant the chat runs (absent = Claude Code, from the hook). */
+  agent?: 'claude' | 'codex';
   event: 'Stop' | 'Notification' | 'UserPromptSubmit' | 'Conflict';
   cwd: string;
   session: string;

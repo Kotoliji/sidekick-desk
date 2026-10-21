@@ -38,6 +38,8 @@ export interface SidekickApi {
   moveBy(dx: number, dy: number): void;
   setInteractive(on: boolean): void;
   togglePanel(): void;
+  /** Open the chat panel (never hides it). */
+  showPanel(): void;
   /** The user clicked a bubble: open what it is about. */
   openNote(id: number): void;
   petMenu(): void;
@@ -54,6 +56,7 @@ export const IPC = {
   moveBy: 'pet:move-by',
   interactive: 'pet:interactive',
   togglePanel: 'pet:toggle-panel',
+  showPanel: 'pet:show-panel',
   openNote: 'pet:open-note',
   petMenu: 'pet:menu',
 } as const;
