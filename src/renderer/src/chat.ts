@@ -8,7 +8,7 @@ declare global {
 }
 
 export type Part = { kind: 'text'; text: string } | { kind: 'tool'; name: string };
-export type Message = { role: 'user' | 'assistant'; parts: Part[] };
+export type Message = { role: 'user' | 'assistant' | 'notice'; parts: Part[] };
 
 export interface TileState {
   title: string;
@@ -48,6 +48,8 @@ function reducer(tile: TileState, action: Action): TileState {
       return { ...tile, error: e.message };
     case 'user':
       return reducer(tile, { type: 'user', text: e.text });
+    case 'notice':
+      return { ...tile, messages: [...tile.messages, { role: 'notice', parts: [{ kind: 'text', text: e.text }] }] };
   }
 }
 

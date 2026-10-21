@@ -10,7 +10,9 @@ export type TileEvent =
   | { t: 'done'; sessionId: string; ms: number; costUsd?: number; contextTokens?: number }
   | { t: 'error'; message: string }
   /** A request Sidekick sent on the user's behalf (e.g. a handoff), shown as a user message. */
-  | { t: 'user'; text: string };
+  | { t: 'user'; text: string }
+  /** A quiet system line in the chat (e.g. the context was refreshed). */
+  | { t: 'notice'; text: string };
 
 /** Main → pet: a speech bubble. `done`/`waiting`/`long` come from Claude Code chats. */
 export interface PetNote {

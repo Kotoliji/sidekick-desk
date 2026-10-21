@@ -86,7 +86,7 @@ export function ChatPanel({ tile, subtitle, onSend, onInterrupt, actions }: Prop
                 <span key={j} className="tool-chip">
                   {p.name}
                 </span>
-              ) : m.role === 'user' ? (
+              ) : m.role !== 'assistant' ? (
                 <p key={j} className="msg-text">
                   {p.text}
                 </p>

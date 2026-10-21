@@ -8,7 +8,7 @@ import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeHookScript, typ
 import { Session } from './session';
 import { Stoppers, type Alert } from './stoppers';
 import { recentTurns } from './transcript';
-import { ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt } from './workspace';
+import { dayKey, ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt, resumeKickoff, wrapUpPrompt } from './workspace';
 import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
 
 // The pet window is mostly transparent: the octopus sits in its bottom-right
@@ -241,16 +241,57 @@ function initAutostart() {
   }
 }
 
+// ── The manager's context lifecycle ──────────────────────────────────
+// Memory lives in files (tasks.md, journal/), not in the conversation. When the
+// context passes its limit, a new day starts, or the user asks, the manager writes
+// its notes, the session is closed and a fresh one starts from those files.
+
+type RolloverReason = 'context' | 'new-day' | 'manual';
+let sessionDay = dayKey();
+/** Set while the manager writes its journal before its context is reset. */
+let rolling: RolloverReason | null = null;
+
+function rollover(dir: string, reason: RolloverReason) {
+  if (rolling || session.busy) return;
+  rolling = reason;
+  toPanel({ t: 'notice', text: reason === 'new-day' ? 'New day: saving yesterday to the journal…' : 'Saving notes to the journal and clearing the context…' });
+  session.send(wrapUpPrompt(sessionDay));
+}
+
+function finishRollover(dir: string) {
+  const reason = rolling;
+  const old = session;
+  startSession(dir);
+  old.close();
+  rolling = null;
+  toPanel({ t: 'notice', text: 'Fresh context' });
+  session.send(reason === 'new-day' ? kickoff(dir) : resumeKickoff(dir));
+}
+
+/** A refresh must actually free room: the context has to grow this far past its starting size. */
+const MIN_GROWTH = 2_000;
+
 function startSession(dir: string) {
   let answer = '';
-  session = new Session(
+  let turns = 0;
+  let baseline = 0; // context size after the first turn (prompt, tools, files read at start)
+  sessionDay = dayKey();
+  const s: Session = new Session(
     (e: TileEvent) => {
+      if (s !== session) return; // a session being retired
       toPanel(e);
       if (e.t === 'status' && !pet.isDestroyed()) pet.webContents.send(IPC.status, e.status);
       if (e.t === 'status' && e.status === 'thinking') answer = '';
       if (e.t === 'delta') answer += e.text;
-      // Tell the user through the octopus when the answer lands out of sight.
-      if (e.t === 'done' && answer && !(panel.isVisible() && panel.isFocused())) notify('sidekick', 'Sidekick', summarize(answer));
+      if (e.t === 'done') {
+        // Let the session settle (idle) before swapping or rolling it.
+        if (rolling) return void setTimeout(() => finishRollover(dir));
+        // Tell the user through the octopus when the answer lands out of sight.
+        if (answer && !(panel.isVisible() && panel.isFocused())) notify('sidekick', 'Sidekick', summarize(answer));
+        if (++turns === 1) baseline = s.contextTokens;
+        const limit = Math.max(loadConfig().managerContextLimit, baseline + MIN_GROWTH);
+        if (turns > 1 && s.contextTokens > limit) setTimeout(() => rollover(dir, 'context'));
+      }
       if (e.t === 'error') notify('sidekick', 'Sidekick', `Something went wrong: ${e.message}`);
     },
     {
@@ -267,6 +308,7 @@ function startSession(dir: string) {
       executable: bundledClaude(),
     },
   );
+  session = s;
 }
 
 let quitting = false;
@@ -286,7 +328,7 @@ else {
     const dir = ensureWorkspace();
     initAutostart();
 
-    ipcMain.on(IPC.send, (_e, text: string) => typeof text === 'string' && text.trim() && session.send(text));
+    ipcMain.on(IPC.send, (_e, text: string) => !rolling && typeof text === 'string' && text.trim() && session.send(text));
     ipcMain.on(IPC.interrupt, () => void session.interrupt());
     ipcMain.on(IPC.openFolder, () => void shell.openPath(dir));
     ipcMain.on(IPC.hidePanel, () => panel.hide());
@@ -306,6 +348,7 @@ else {
       Menu.buildFromTemplate([
         { label: 'Open chat', click: () => (placePanel(), reveal(panel)) },
         { label: 'Open tasks folder', click: () => void shell.openPath(dir) },
+        { label: 'Wrap up now (journal + fresh context)', enabled: !rolling && !session.busy, click: () => rollover(dir, 'manual') },
         { type: 'separator' },
         {
           label: 'Connect Claude Code chats',
@@ -337,6 +380,8 @@ else {
     setInterval(() => stoppers.tick(), Number(process.env.SIDEKICK_TICK_MS ?? 30_000));
     // Greet once both windows can receive the stream.
     let loaded = 0;
-    for (const w of [pet, panel]) w.webContents.once('did-finish-load', () => ++loaded === 2 && session.send(kickoff()));
+    for (const w of [pet, panel]) w.webContents.once('did-finish-load', () => ++loaded === 2 && session.send(kickoff(dir)));
+    // Past midnight, close the old day once the manager is idle.
+    setInterval(() => dayKey() !== sessionDay && rollover(dir, 'new-day'), 60_000);
   });
 }

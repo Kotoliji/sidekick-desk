@@ -1,14 +1,16 @@
 import { app } from 'electron';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 import type { StopperConfig } from './stoppers';
 
 export interface SidekickConfig extends StopperConfig {
   /** Model for the manager itself; management needs no top-tier model. */
   managerModel: string;
+  /** Past this many tokens the manager writes its journal and starts with a fresh context. */
+  managerContextLimit: number;
 }
 
-const DEFAULT_CONFIG: SidekickConfig = { remindAfterMinutes: 10, longChatTokens: 150_000, managerModel: 'sonnet' };
+const DEFAULT_CONFIG: SidekickConfig = { remindAfterMinutes: 10, longChatTokens: 150_000, managerModel: 'sonnet', managerContextLimit: 40_000 };
 
 /** Plain-file home of the manager: the user edits these files by hand too. */
 export function dataDir() {
@@ -45,7 +47,7 @@ export function loadConfig(): SidekickConfig {
 
 export function ensureWorkspace() {
   const dir = dataDir();
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(join(dir, 'journal'), { recursive: true });
   for (const [name, body] of Object.entries(DEFAULTS)) {
     const file = join(dir, name);
     if (!existsSync(file)) writeFileSync(file, body);
@@ -71,6 +73,7 @@ export function managerPrompt(dir: string, eventsFile: string) {
 Your files live in ${dir}. You may read any file, but you may only write inside this folder.
 - profile.md: who the user is and how to work with them. Follow it.
 - tasks.md: the plan, "- [ ]" / "- [x]". Keep it current with Edit whenever the user adds, finishes or moves a task. Keep "Today" to at most 5 items; move the rest to "Backlog".
+- journal/YYYY-MM-DD.md: your short notes from earlier sessions. Your conversation is cleared regularly, so anything worth remembering belongs in tasks.md or the journal.
 
 # The user's other chats
 ${eventsFile} is a live log of the user's Claude Code chats (VS Code, terminal), one JSON object per line:
@@ -97,7 +100,45 @@ Below are its last turns. Reply with:
 ${turns || '(the transcript could not be read; ask the user what the chat was about)'}`;
 }
 
-export function kickoff(now = new Date()) {
-  const when = now.toLocaleString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  return `[Session start: ${when}] Read profile.md and tasks.md. Greet the user in one line with today's date, list today's open tasks briefly (or ask for the plan if there are none), then ask what we start with.`;
+/** Local calendar day as YYYY-MM-DD. */
+export const dayKey = (d = new Date()) => d.toLocaleDateString('sv-SE');
+
+/** The newest journal entry, relative to the workspace, if any. */
+function latestJournal(dir: string) {
+  try {
+    const last = readdirSync(join(dir, 'journal'))
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+      .sort()
+      .at(-1);
+    return last && `journal/${last}`;
+  } catch {
+    return undefined;
+  }
+}
+
+const stamp = (now: Date) =>
+  now.toLocaleString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/** First turn of a fresh session at the start of a day. */
+export function kickoff(dir: string, now = new Date()) {
+  const journal = latestJournal(dir);
+  return `[Session start: ${stamp(now)}] Read profile.md, tasks.md${journal ? ` and ${journal} (your last notes)` : ''}. If tasks.md has a "Tomorrow" section from an earlier day, move those items into "Today". Greet the user in one line with today's date, list today's open tasks briefly (or ask for the plan if there are none), then ask what we start with.`;
+}
+
+/** First turn of a fresh session that replaces a full one mid-day: no greeting. */
+export function resumeKickoff(dir: string, now = new Date()) {
+  const journal = latestJournal(dir);
+  return `[Context refreshed: ${stamp(now)}] Your earlier conversation was saved and cleared. Read tasks.md${journal ? ` and ${journal}` : ''}. Do not greet; reply with one line: what we are focused on right now.`;
+}
+
+/**
+ * Last turn before the context is erased: everything worth keeping goes to files.
+ * `day` is the day being closed (yesterday, for a new-day rollover).
+ */
+export function wrapUpPrompt(day: string, now = new Date()) {
+  const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `[Wrap-up] Your conversation context is about to be erased; only your files survive. Briefly, now:
+1. Update tasks.md: check off what is done and keep what is open. Put anything planned for the next day under a "## Tomorrow" heading (create it if missing).
+2. Append to journal/${day}.md (create it if missing) a section "## ${time}" with 3-5 short lines: what got done, what is still open, decisions or facts worth remembering.
+Then reply with exactly one short line confirming it, in the user's language.`;
 }

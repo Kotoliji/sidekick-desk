@@ -266,6 +266,19 @@ button {
   background: var(--user-bubble);
 }
 
+.msg-notice {
+  align-self: center;
+  color: var(--muted);
+  font: 11px var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.msg-notice .msg-text::before,
+.msg-notice .msg-text::after {
+  content: ' ─── ';
+  opacity: 0.5;
+}
+
 .msg-text {
   margin: 0;
   white-space: pre-wrap;
