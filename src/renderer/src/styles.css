@@ -266,6 +266,55 @@ button {
   background: var(--user-bubble);
 }
 
+/* A bubble about the user's Claude Code chats, kept in the chat timeline. */
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--activity, var(--muted));
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  transition: background var(--dur) var(--ease);
+}
+
+.activity:hover {
+  background: var(--surface-strong);
+}
+
+.activity[data-kind='done'] {
+  --activity: #2dd4a0;
+}
+
+.activity[data-kind='waiting'] {
+  --activity: #ffb547;
+}
+
+.activity[data-kind='long'] {
+  --activity: #a48bff;
+}
+
+.activity[data-kind='conflict'] {
+  --activity: #ff5d5d;
+}
+
+.activity-title {
+  font: 600 10px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--activity, var(--muted));
+}
+
+.activity-text {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .msg-notice {
   align-self: center;
   color: var(--muted);

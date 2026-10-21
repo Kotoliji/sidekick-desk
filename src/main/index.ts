@@ -143,10 +143,27 @@ function togglePanel() {
   reveal(panel);
 }
 
+/** Chat activity the manager has not been told about yet; it rides along with the user's next message. */
+const unseen: string[] = [];
+const ACTIVITY_LABEL = { done: 'finished', waiting: 'waiting', long: 'long chat', conflict: 'file conflict' } as const;
+
 function notify(kind: PetNote['kind'], title: string, text: string, action?: NoteAction) {
   const note: PetNote = { id: ++noteId, kind, title, text };
   if (action) noteActions.set(note.id, action);
   if (!pet.isDestroyed()) pet.webContents.send(IPC.note, note);
+  // Bubbles vanish; the chat keeps a card of every one about the user's chats.
+  if (kind !== 'sidekick') {
+    toPanel({ t: 'activity', note });
+    unseen.push(`- ${title} (${ACTIVITY_LABEL[kind]}): ${text}`);
+    if (unseen.length > 12) unseen.shift();
+  }
+}
+
+/** The user's message, prefixed with what happened in their chats since they last wrote. */
+function withActivity(text: string) {
+  if (!unseen.length) return text;
+  const digest = unseen.splice(0).join('\n');
+  return `[Chat activity since the user's last message, as shown to them in bubbles]\n${digest}\n\n[User]\n${text}`;
 }
 
 function toPanel(e: TileEvent) {
@@ -330,7 +347,7 @@ else {
     const dir = ensureWorkspace();
     initAutostart();
 
-    ipcMain.on(IPC.send, (_e, text: string) => !rolling && typeof text === 'string' && text.trim() && session.send(text));
+    ipcMain.on(IPC.send, (_e, text: string) => !rolling && typeof text === 'string' && text.trim() && session.send(withActivity(text)));
     ipcMain.on(IPC.interrupt, () => void session.interrupt());
     ipcMain.on(IPC.openFolder, () => void shell.openPath(dir));
     ipcMain.on(IPC.hidePanel, () => panel.hide());

@@ -10,6 +10,7 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 - Drag it anywhere (it remembers the spot), click to open the chat, right-click for the menu (open chat, tasks folder, quit).
 - Greets you with the date at start, reads your profile and today's tasks, and asks for the plan.
 - When an answer lands while the chat is closed, it shows up as a speech bubble; click the bubble to open the chat.
+- Every bubble about your Claude Code chats is also kept as a card in the chat, and the manager is told about them with your next message, so you can ask it "what happened?".
 - Keeps `tasks.md` current as you talk ("add…", "done with…", "move to backlog").
 - Writes prompts for your other chats as code blocks with a one-click copy button.
 - Watches your Claude Code chats (VS Code or terminal): a green bubble when one finishes, a yellow one when it needs your permission. Click the bubble to jump to that project in VS Code.

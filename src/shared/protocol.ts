@@ -12,7 +12,9 @@ export type TileEvent =
   /** A request Sidekick sent on the user's behalf (e.g. a handoff), shown as a user message. */
   | { t: 'user'; text: string }
   /** A quiet system line in the chat (e.g. the context was refreshed). */
-  | { t: 'notice'; text: string };
+  | { t: 'notice'; text: string }
+  /** A copy of a bubble about the user's Claude Code chats, kept in the chat as a card. */
+  | { t: 'activity'; note: PetNote };
 
 /** Main → pet: a speech bubble. All kinds but `sidekick` come from Claude Code chats. */
 export interface PetNote {

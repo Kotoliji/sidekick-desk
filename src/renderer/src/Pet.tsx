@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { PetNote, TileStatus } from '../../shared/protocol';
+import { NOTE_HINT, NOTE_ICON } from './notes';
 import { frame, PALETTE, SPRITE_H, SPRITE_W } from './octopus';
 
 // A chat waiting on the user matters more than a finished answer, so it stays up longer.
 const NOTE_MS = { sidekick: 9000, done: 12000, waiting: 30000, long: 30000, conflict: 45000 } as const;
-const NOTE_ICON = { sidekick: '', done: '✓ ', waiting: '! ', long: '≡ ', conflict: '⚠ ' } as const;
-const NOTE_HINT = {
-  sidekick: 'Open the chat',
-  done: 'Open this project in VS Code',
-  waiting: 'Open this project in VS Code',
-  long: 'Get a summary and a fresh-chat prompt',
-  conflict: 'Open this project in VS Code',
-} as const;
 const DRAG_THRESHOLD = 3;
 
 function Sprite({ blink, legs }: { blink: boolean; legs: 'a' | 'b' }) {

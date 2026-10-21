@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { TileState } from './chat';
+import { NOTE_HINT, NOTE_ICON } from './notes';
 
 const STATUS_LABEL = { idle: 'ready', thinking: 'thinking', streaming: 'writing', error: 'error' } as const;
 
@@ -79,7 +80,16 @@ export function ChatPanel({ tile, subtitle, onSend, onInterrupt, actions }: Prop
       </header>
 
       <div className="tile-log" ref={log}>
-        {tile.messages.map((m, i) => (
+        {tile.messages.map((m, i) =>
+          m.role === 'activity' ? (
+            <button key={i} className="activity" data-kind={m.note.kind} onClick={() => window.sidekick.openNote(m.note.id)} title={NOTE_HINT[m.note.kind]}>
+              <span className="activity-title">
+                {NOTE_ICON[m.note.kind]}
+                {m.note.title}
+              </span>
+              <span className="activity-text">{m.note.text}</span>
+            </button>
+          ) : (
           <div key={i} className={`msg msg-${m.role}`}>
             {m.parts.map((p, j) =>
               p.kind === 'tool' ? (
@@ -99,7 +109,8 @@ export function ChatPanel({ tile, subtitle, onSend, onInterrupt, actions }: Prop
               ),
             )}
           </div>
-        ))}
+          ),
+        )}
         {tile.status === 'thinking' && (
           <div className="typing" aria-label="Sidekick is thinking">
             <i />
