@@ -10,10 +10,11 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 - Drag it anywhere (it remembers the spot), click to open the chat, right-click for the menu (open chat, tasks folder, quit).
 - Greets you with the date at start, reads your profile and today's tasks, and asks for the plan.
 - When an answer lands while the chat is closed, it shows up as a speech bubble; click the bubble to open the chat.
-- Every bubble about your Claude Code chats is also kept as a card in the chat, and the manager is told about them with your next message, so you can ask it "what happened?".
+- Every bubble about your chats is also kept as a card in the Sidekick chat, and the manager is told about them with your next message, so you can ask it "what happened?". Click a card to jump to that chat: Sidekick focuses the VS Code window it was opened in and opens its tab (reopening it if closed).
 - Keeps `tasks.md` current as you talk ("add…", "done with…", "move to backlog").
 - Writes prompts for your other chats as code blocks with a one-click copy button.
-- Watches your Claude Code chats (VS Code or terminal): a green bubble when one finishes, a yellow one when it needs your permission. Click the bubble to jump to that project in VS Code.
+- Watches your Claude Code and Codex (OpenAI) chats, in VS Code or the terminal, several per project if you like: a green bubble when one finishes, a yellow one when a Claude chat needs your permission. Labels read "PROJECT · tab title".
+- Codex is followed read-only through its session files (`~/.codex/sessions`), with no change to its config. Its file edits are recorded for the file guard, so a Claude chat is stopped before touching a file Codex just edited; Codex itself has no pre-edit hook, so its own clashes are reported after the fact.
 - Stoppers: a reminder when a chat has waited for you 10 minutes (writing in that chat cancels it), and a purple bubble when a chat's conversation has grown by 100k tokens (its fixed starting size, which depends on your tools and MCP servers, is left out). Click that one and Sidekick reads the end of the chat and writes a short summary plus a prompt to continue in a fresh chat.
 - File guard: when a chat is about to edit a file that a different chat edited in the last 20 minutes, the edit is stopped and Claude Code asks you first (or refuses outright, if you prefer); a red bubble tells you which chats collided. Edits made through shell commands are not covered.
 - A manager, not a coder: it runs in its own environment (own prompt, no plugins or CLAUDE.md, a lighter model) and answers as goal → one next step → a ready prompt → how to check. It turns implementation requests into prompts for your Claude Code chats and flags plans that are too big for a day.

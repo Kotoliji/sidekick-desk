@@ -1,13 +1,14 @@
 import { app, BrowserWindow, ipcMain, Menu, screen, shell, type Rectangle } from 'electron';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeGuardSettings, writeHookScript, type BridgeEvent } from './hooks';
 import { Session } from './session';
 import { Stoppers, type Alert, type ChatRef } from './stoppers';
-import { recentTurns, sessionInfo } from './transcript';
+import { recentTurns, sessionInfo, type SessionInfo } from './transcript';
+import { codexSessionInfo, watchCodex } from './codex';
 import { dayKey, ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt, resumeKickoff, wrapUpPrompt } from './workspace';
 import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
 
@@ -188,10 +189,11 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
  * "PROJECT · tab title". The window is the folder the chat started in (VS Code's workspace).
  */
 function locate(ref: ChatRef): { label: string; target: ChatTarget } {
-  const info = ref.transcript ? sessionInfo(ref.transcript) : { inVSCode: false, root: undefined, title: undefined };
+  const info: SessionInfo = !ref.transcript ? { inVSCode: false } : ref.agent === 'codex' ? codexSessionInfo(ref.transcript) : sessionInfo(ref.transcript);
   const root = info.root ?? ref.cwd;
+  const tab = [ref.agent === 'codex' && 'Codex', info.title && clip(info.title, 32)].filter(Boolean).join(': ');
   return {
-    label: info.title ? `${basename(root)} · ${clip(info.title, 32)}` : basename(root),
+    label: tab ? `${basename(root)} · ${tab}` : basename(root),
     target: { type: 'chat', agent: ref.agent, folder: root, session: info.inVSCode ? ref.session : undefined },
   };
 }
@@ -241,8 +243,16 @@ function onBridgeEvent(e: BridgeEvent, dir: string, stoppers: Stoppers) {
     if (e.event === 'Stop') notify('done', label, e.last ? summarize(e.last, 140) : 'Answer ready', target);
     // idle_prompt repeats a Stop a minute later; only real requests get a bubble.
     else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', label, e.message ?? 'Needs you', target);
-    else if (e.event === 'Conflict')
-      notify('conflict', label, `Stopped an edit of ${basename(e.file ?? '')}: the chat in ${basename(e.other ?? '')} edited it minutes ago.`, target);
+    else if (e.event === 'Conflict') {
+      const file = basename(e.file ?? '');
+      const other = basename(e.other ?? '');
+      // Claude is stopped before the edit; Codex is only seen after it.
+      const text =
+        e.agent === 'codex'
+          ? `Edited ${file}, which the chat in ${other} edited minutes ago. Check they did not overwrite each other.`
+          : `Stopped an edit of ${file}: the chat in ${other} edited it minutes ago.`;
+      notify('conflict', label, text, target);
+    }
   }
   stoppers.onEvent(e);
 }
@@ -437,6 +447,8 @@ else {
     };
     syncGuard();
     tailEvents((e) => onBridgeEvent(e, dir, stoppers));
+    // Codex chats join the same log, so everything downstream handles both assistants alike.
+    watchCodex((e) => appendFileSync(EVENTS_FILE, `${JSON.stringify(e)}\n`));
     setInterval(() => (stoppers.tick(), syncGuard()), Number(process.env.SIDEKICK_TICK_MS ?? 30_000));
     // Greet once both windows can receive the stream.
     let loaded = 0;

@@ -10,6 +10,7 @@ interface Line {
   cwd?: string;
   entrypoint?: string;
   aiTitle?: string;
+  payload?: { type?: string; role?: string; content?: { type: string; text?: string }[] };
   message?: {
     content?: string | { type: string; text?: string }[];
     usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
@@ -88,7 +89,9 @@ export function recentTurns(path: string, count = 14, maxChars = 600): string {
   try {
     const lines = readLines(path, 1_500_000);
     for (let i = lines.length - 1; i >= 0 && turns.length < count; i--) {
-      const l = lines[i];
+      let l = lines[i];
+      // Codex rollouts wrap messages as { type: 'response_item', payload: { type: 'message', role, content } }.
+      if (l.type === 'response_item' && l.payload?.type === 'message') l = { type: l.payload.role, message: { content: l.payload.content } };
       if (l.isSidechain || (l.type !== 'user' && l.type !== 'assistant')) continue;
       const text = textOf(l.message?.content).trim();
       // Skip tool results, command echoes and other machinery.

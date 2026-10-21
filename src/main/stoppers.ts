@@ -53,7 +53,7 @@ export class Stoppers {
       chat.waitingSince = undefined; // the user is back in this chat
     } else if (e.event === 'Stop') {
       this.wait(chat, e.ts, 'answer');
-      this.checkLength(chat, e.session);
+      this.checkLength(chat, e.session, e.growth);
     } else if (e.event === 'Notification' && e.type === 'permission_prompt') {
       this.wait(chat, e.ts, 'permission');
     }
@@ -76,9 +76,9 @@ export class Stoppers {
     chat.reminded = false;
   }
 
-  private checkLength(chat: Chat, session: string) {
+  private checkLength(chat: Chat, session: string, growth?: number) {
     if (!chat.transcript) return;
-    const tokens = conversationTokens(chat.transcript);
+    const tokens = growth ?? conversationTokens(chat.transcript);
     const limit = this.config().longChatTokens;
     if (!tokens || tokens < limit) return;
     // Warn when crossing the limit, then again after every further half-limit of growth.

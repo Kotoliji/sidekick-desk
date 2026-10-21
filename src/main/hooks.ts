@@ -44,6 +44,41 @@ export interface BridgeEvent {
   /** Conflict: the file, and the project of the chat that edited it first. */
   file?: string;
   other?: string;
+  /** Codex: how much the conversation has grown, in tokens (Claude's is read from its transcript). */
+  growth?: number;
+}
+
+/**
+ * Record edits that happened without the hook (Codex has no pre-edit hook) in the same
+ * claims file, so Claude chats are stopped before touching them. Returns files that
+ * another chat held, as conflicts to report.
+ */
+export function claimFiles(files: string[], session: string, cwd: string) {
+  const locksFile = join(BRIDGE_DIR, 'locks.json');
+  let guard: GuardSettings = { mode: 'ask', minutes: 20 };
+  let locks: Record<string, { session: string; cwd: string; ts: number }> = {};
+  try {
+    guard = JSON.parse(readFileSync(GUARD_FILE, 'utf8'));
+  } catch {
+    /* defaults */
+  }
+  if (guard.mode === 'off' || !files.length) return [];
+  try {
+    locks = JSON.parse(readFileSync(locksFile, 'utf8'));
+  } catch {
+    /* no claims yet */
+  }
+  const now = Date.now();
+  const conflicts: { file: string; other: string }[] = [];
+  for (const file of files) {
+    const key = file.toLowerCase(); // same key as hook.cjs: resolved path, lower-cased
+    const held = locks[key];
+    if (held && held.session !== session && now - held.ts < guard.minutes * 60_000) conflicts.push({ file, other: held.cwd });
+    locks[key] = { session, cwd, ts: now };
+  }
+  mkdirSync(BRIDGE_DIR, { recursive: true });
+  writeFileSync(locksFile, JSON.stringify(locks));
+  return conflicts;
 }
 
 export interface GuardSettings {
