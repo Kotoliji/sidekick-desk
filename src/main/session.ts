@@ -41,6 +41,8 @@ export interface SessionOptions {
   tools?: string[];
   /** Decides each tool call that is not auto-allowed; denies everything when omitted. */
   canUseTool?: CanUseTool;
+  /** Extra environment for the Claude Code process (merged over process.env). */
+  env?: Record<string, string>;
 }
 
 const denyAll: CanUseTool = async () => ({ behavior: 'deny', message: 'Tool use is not allowed here. Answer directly.' });
@@ -64,6 +66,7 @@ export class Session {
         resume: opts.resume,
         systemPrompt: opts.systemPrompt,
         tools: opts.tools,
+        env: opts.env && { ...process.env, ...opts.env },
         includePartialMessages: true,
         canUseTool: opts.canUseTool ?? denyAll,
       },

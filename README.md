@@ -2,7 +2,7 @@
 
 A pixel-art octopus that floats on your Windows desktop and manages your day. You do the deep work in your Claude Code chats; Sidekick keeps the plan, helps you shape prompts and choose a direction, and pings you with a speech bubble when something needs you. Click it and it unfolds into a small chat.
 
-> Work in progress. Built in small phases; see the commit history. Next up: alerts when a Claude Code chat in VS Code finishes or is waiting for you.
+> Work in progress. Built in small phases; see the commit history.
 
 ## What it does today
 
@@ -12,6 +12,13 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 - When an answer lands while the chat is closed, it shows up as a speech bubble; click the bubble to open the chat.
 - Keeps `tasks.md` current as you talk ("add…", "done with…", "move to backlog").
 - Writes prompts for your other chats as code blocks with a one-click copy button.
+- Watches your Claude Code chats (VS Code or terminal): a green bubble when one finishes, a yellow one when it needs your permission. Click the bubble to jump to that project in VS Code.
+
+## Connecting your Claude Code chats
+
+Right-click the octopus → **Connect Claude Code chats**. This adds two hook entries (`Stop`, `Notification`) to `~/.claude/settings.json`, keeping a backup at `settings.json.sidekick-backup`, and leaves the rest of the file untouched. Unticking it removes them. New chats pick it up; reload VS Code windows that were already open.
+
+The hook is a tiny dependency-free script, `~/.sidekick/hook.cjs`, that appends one JSON line per event to `~/.sidekick/events.jsonl`. Sidekick tails that file, so the hook never blocks Claude Code and events are not lost while Sidekick is closed. The manager agent can read the same log when you ask it what is going on.
 
 ## Your files
 
@@ -36,6 +43,7 @@ npm run dev
 | Env var | Default | Meaning |
 |---|---|---|
 | `SIDEKICK_HOME` | `Documents\Sidekick` | Folder with `profile.md` and `tasks.md` |
+| `SIDEKICK_BRIDGE` | `~/.sidekick` | Folder with the hook script and the event log |
 
 If the app starts as a plain Node process from inside VS Code, your terminal has `ELECTRON_RUN_AS_NODE=1` set; unset it first.
 

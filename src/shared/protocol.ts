@@ -10,9 +10,10 @@ export type TileEvent =
   | { t: 'done'; sessionId: string; ms: number; costUsd?: number }
   | { t: 'error'; message: string };
 
-/** Main → pet: a speech bubble. */
+/** Main → pet: a speech bubble. `done`/`waiting` come from Claude Code chats. */
 export interface PetNote {
   id: number;
+  kind: 'sidekick' | 'done' | 'waiting';
   title: string;
   text: string;
 }
@@ -31,6 +32,8 @@ export interface SidekickApi {
   moveBy(dx: number, dy: number): void;
   setInteractive(on: boolean): void;
   togglePanel(): void;
+  /** The user clicked a bubble: open what it is about. */
+  openNote(id: number): void;
   petMenu(): void;
 }
 
@@ -45,5 +48,6 @@ export const IPC = {
   moveBy: 'pet:move-by',
   interactive: 'pet:interactive',
   togglePanel: 'pet:toggle-panel',
+  openNote: 'pet:open-note',
   petMenu: 'pet:menu',
 } as const;

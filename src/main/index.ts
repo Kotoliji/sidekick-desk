@@ -1,8 +1,10 @@
 import { app, BrowserWindow, ipcMain, Menu, screen, shell, type Rectangle } from 'electron';
+import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
+import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeHookScript, type BridgeEvent } from './hooks';
 import { Session } from './session';
 import { ensureWorkspace, isInside, kickoff, managerPrompt } from './workspace';
 import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
@@ -60,6 +62,8 @@ let pet: BrowserWindow;
 let panel: BrowserWindow;
 let session: Session;
 let noteId = 0;
+/** Project folder behind each bubble that came from a Claude Code chat. */
+const noteTargets = new Map<number, string>();
 
 function createPet() {
   const area = screen.getPrimaryDisplay().workArea;
@@ -136,9 +140,26 @@ function togglePanel() {
   reveal(panel);
 }
 
-function notify(title: string, text: string) {
-  const note: PetNote = { id: ++noteId, title, text };
+function notify(kind: PetNote['kind'], title: string, text: string, target?: string) {
+  const note: PetNote = { id: ++noteId, kind, title, text };
+  if (target) noteTargets.set(note.id, target);
   if (!pet.isDestroyed()) pet.webContents.send(IPC.note, note);
+}
+
+/** Bring up the VS Code window for a project (falls back to Explorer without the `code` CLI). */
+function openInVSCode(folder: string) {
+  if (HIDDEN) return console.log(`[hidden] open in VS Code ${folder}`);
+  const child = spawn('code', [`"${folder}"`], { shell: true, detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('exit', (code) => code && void shell.openPath(folder));
+  child.unref();
+}
+
+function onBridgeEvent(e: BridgeEvent, dir: string) {
+  if (!e.cwd || resolve(e.cwd) === resolve(dir)) return; // Sidekick's own session
+  const project = basename(e.cwd);
+  if (e.event === 'Stop') notify('done', project, e.last ? summarize(e.last, 140) : 'Answer ready', e.cwd);
+  // idle_prompt repeats a Stop a minute later; only real requests get a bubble.
+  else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', project, e.message ?? 'Needs you', e.cwd);
 }
 
 /** First lines of a Markdown answer as plain text, for a bubble. */
@@ -171,14 +192,16 @@ function startSession(dir: string) {
       if (e.t === 'status' && e.status === 'thinking') answer = '';
       if (e.t === 'delta') answer += e.text;
       // Tell the user through the octopus when the answer lands out of sight.
-      if (e.t === 'done' && answer && !(panel.isVisible() && panel.isFocused())) notify('Sidekick', summarize(answer));
-      if (e.t === 'error') notify('Sidekick', `Something went wrong: ${e.message}`);
+      if (e.t === 'done' && answer && !(panel.isVisible() && panel.isFocused())) notify('sidekick', 'Sidekick', summarize(answer));
+      if (e.t === 'error') notify('sidekick', 'Sidekick', `Something went wrong: ${e.message}`);
     },
     {
       cwd: dir,
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: managerPrompt(dir) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: managerPrompt(dir, EVENTS_FILE) },
       tools: ['Read', 'Glob', 'Grep', 'Edit', 'Write'],
       canUseTool: writeOnlyInside(dir),
+      // Sidekick's own turns must not come back through the hook as "a chat finished".
+      env: { SIDEKICK_SELF: '1' },
     },
   );
 }
@@ -206,10 +229,25 @@ else {
     });
     ipcMain.on(IPC.interactive, (_e, on: boolean) => pet.setIgnoreMouseEvents(!on, { forward: true }));
     ipcMain.on(IPC.togglePanel, () => togglePanel());
+    ipcMain.on(IPC.openNote, (_e, id: number) => {
+      const target = noteTargets.get(id);
+      if (target) openInVSCode(target);
+      else togglePanel();
+    });
     ipcMain.on(IPC.petMenu, () =>
       Menu.buildFromTemplate([
         { label: 'Open chat', click: () => (placePanel(), reveal(panel)) },
         { label: 'Open tasks folder', click: () => void shell.openPath(dir) },
+        { type: 'separator' },
+        {
+          label: 'Connect Claude Code chats',
+          type: 'checkbox',
+          checked: hooksInstalled(),
+          click: (item) => {
+            setHooks(item.checked);
+            notify('sidekick', 'Sidekick', item.checked ? 'Connected: I will tell you when a Claude Code chat finishes or needs you.' : 'Disconnected from Claude Code chats.');
+          },
+        },
         { type: 'separator' },
         { label: 'Quit Sidekick', click: () => app.quit() },
       ]).popup({ window: pet }),
@@ -218,6 +256,8 @@ else {
     createPanel();
     createPet();
     startSession(dir);
+    if (hooksInstalled()) writeHookScript(); // keep the script current after updates
+    tailEvents((e) => onBridgeEvent(e, dir));
     // Greet once both windows can receive the stream.
     let loaded = 0;
     for (const w of [pet, panel]) w.webContents.once('did-finish-load', () => ++loaded === 2 && session.send(kickoff()));

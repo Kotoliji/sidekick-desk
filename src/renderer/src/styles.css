@@ -618,6 +618,22 @@ button {
   color: #e0607a;
 }
 
+.bubble[data-kind='done'] .bubble-title {
+  color: #1f9d7a;
+}
+
+.bubble[data-kind='waiting'] {
+  background: #fff1c9;
+}
+
+.bubble[data-kind='waiting']::after {
+  background: #fff1c9;
+}
+
+.bubble[data-kind='waiting'] .bubble-title {
+  color: #c2410c;
+}
+
 .bubble-more {
   padding: 0 5px;
   border-radius: 999px;

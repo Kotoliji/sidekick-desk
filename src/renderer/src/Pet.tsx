@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { PetNote, TileStatus } from '../../shared/protocol';
 import { frame, PALETTE, SPRITE_H, SPRITE_W } from './octopus';
 
-const NOTE_MS = 9000;
+// A chat waiting on the user matters more than a finished answer, so it stays up longer.
+const NOTE_MS = { sidekick: 9000, done: 12000, waiting: 30000 } as const;
+const NOTE_ICON = { sidekick: '', done: '✓ ', waiting: '! ' } as const;
 const DRAG_THRESHOLD = 3;
 
 function Sprite({ blink, legs }: { blink: boolean; legs: 'a' | 'b' }) {
@@ -64,7 +66,7 @@ export function Pet() {
   const current = notes[0];
   useEffect(() => {
     if (!current) return;
-    const t = setTimeout(() => setNotes((q) => q.slice(1)), NOTE_MS);
+    const t = setTimeout(() => setNotes((q) => q.slice(1)), NOTE_MS[current.kind]);
     return () => clearTimeout(t);
   }, [current]);
 
@@ -100,18 +102,26 @@ export function Pet() {
   return (
     <div className="pet-root">
       {current && (
-        <div className="bubble" key={current.id} onMouseEnter={() => interactive(true)} onMouseLeave={() => interactive(false)}>
+        <div
+          className="bubble"
+          data-kind={current.kind}
+          key={current.id}
+          onMouseEnter={() => interactive(true)}
+          onMouseLeave={() => interactive(false)}
+        >
           <button className="bubble-close" onClick={() => setNotes((q) => q.slice(1))} title="Dismiss">
             ×
           </button>
           <button
             className="bubble-body"
             onClick={() => {
-              setNotes([]);
-              window.sidekick.togglePanel();
+              setNotes((q) => q.slice(1));
+              window.sidekick.openNote(current.id);
             }}
+            title={current.kind === 'sidekick' ? 'Open the chat' : 'Open this project in VS Code'}
           >
             <span className="bubble-title">
+              {NOTE_ICON[current.kind]}
               {current.title}
               {notes.length > 1 && <span className="bubble-more">+{notes.length - 1}</span>}
             </span>
