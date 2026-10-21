@@ -1,9 +1,9 @@
 import { useEffect, useReducer } from 'react';
-import type { TileEvent, TileStatus, TiledeckApi } from '../../shared/protocol';
+import type { SidekickApi, TileEvent, TileStatus } from '../../shared/protocol';
 
 declare global {
   interface Window {
-    tiledeck: TiledeckApi;
+    sidekick: SidekickApi;
   }
 }
 
@@ -49,19 +49,18 @@ function reducer(tile: TileState, action: Action): TileState {
   }
 }
 
-/** State of the chat in this window, fed by the main process over IPC. */
-export function useTile() {
-  const n = new URLSearchParams(location.search).get('n') ?? '1';
-  const [tile, dispatch] = useReducer(reducer, { title: `Chat ${n}`, status: 'idle', messages: [] });
+/** The conversation with the manager, fed by the main process over IPC. */
+export function useChat() {
+  const [tile, dispatch] = useReducer(reducer, { title: 'Sidekick', status: 'idle', messages: [] });
 
-  useEffect(() => window.tiledeck.onEvent((e) => dispatch({ type: 'event', e })), []);
+  useEffect(() => window.sidekick.onEvent((e) => dispatch({ type: 'event', e })), []);
 
   return {
     tile,
     send(text: string) {
       dispatch({ type: 'user', text });
-      window.tiledeck.send(text);
+      window.sidekick.send(text);
     },
-    interrupt: () => window.tiledeck.interrupt(),
+    interrupt: () => window.sidekick.interrupt(),
   };
 }

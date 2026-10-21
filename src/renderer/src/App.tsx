@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useTile } from './deck';
-import { Tile } from './Tile';
+import { useChat } from './chat';
+import { ChatPanel } from './ChatPanel';
 
 type Theme = 'aurora' | 'hud';
-const THEME_KEY = 'tiledeck.theme';
+const THEME_KEY = 'sidekick.theme';
 
 function loadTheme(): Theme {
   const fromUrl = new URLSearchParams(location.search).get('theme');
@@ -15,45 +15,49 @@ function loadTheme(): Theme {
   }
 }
 
-/** One window = one chat tile. All windows share the theme through localStorage. */
+const today = () => new Date().toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
+
 export function App() {
-  const { tile, send, interrupt } = useTile();
+  const { tile, send, interrupt } = useChat();
   const [theme, setTheme] = useState<Theme>(loadTheme);
+  const [pinned, setPinned] = useState(false);
+
+  useEffect(() => {
+    void window.sidekick.info().then((i) => setPinned(i.pinned));
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.title = `tiledeck · ${tile.title}`;
     try {
       localStorage.setItem(THEME_KEY, theme);
     } catch {
       /* storage blocked: theme just won't persist */
     }
-  }, [theme, tile.title]);
-
-  // Another window switched the theme.
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => e.key === THEME_KEY && setTheme(e.newValue === 'hud' ? 'hud' : 'aurora');
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  }, [theme]);
 
   const actions = (
     <div className="win-actions">
-      <button className="theme-toggle" onClick={() => setTheme(theme === 'aurora' ? 'hud' : 'aurora')} title="Switch theme">
-        <span className={theme === 'aurora' ? 'on' : ''}>Aurora</span>
-        <span className={theme === 'hud' ? 'on' : ''}>HUD</span>
+      <button className="win-btn" onClick={() => window.sidekick.openFolder()} title="Open profile and tasks folder">
+        ▤
       </button>
-      <button className="win-btn" onClick={() => window.tiledeck.newTile()} title="New chat window">
-        +
+      <button className="win-btn" onClick={() => setTheme(theme === 'aurora' ? 'hud' : 'aurora')} title={`Theme: ${theme}`}>
+        ◐
       </button>
-      <button className="win-btn" onClick={() => window.tiledeck.minimize()} title="Minimize">
+      <button
+        className={`win-btn ${pinned ? 'is-on' : ''}`}
+        onClick={() => void window.sidekick.togglePin().then(setPinned)}
+        title={pinned ? 'Unpin (stop staying on top)' : 'Pin on top of other windows'}
+      >
+        ⊼
+      </button>
+      <button className="win-btn" onClick={() => window.sidekick.minimize()} title="Minimize">
         –
       </button>
-      <button className="win-btn win-close" onClick={() => window.tiledeck.close()} title="Close">
+      <button className="win-btn win-close" onClick={() => window.sidekick.close()} title="Close">
         ×
       </button>
     </div>
   );
 
-  return <Tile tile={tile} onSend={send} onInterrupt={interrupt} actions={actions} />;
+  return <ChatPanel tile={tile} subtitle={today()} onSend={send} onInterrupt={interrupt} actions={actions} />;
 }

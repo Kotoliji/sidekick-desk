@@ -1,4 +1,4 @@
-import { query, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type Options, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TileEvent } from '../shared/protocol';
 
 /** Async queue of user messages: the session's prompt stream, kept open between turns. */
@@ -36,11 +36,18 @@ export interface SessionOptions {
   cwd: string;
   model?: string;
   resume?: string;
+  systemPrompt?: Options['systemPrompt'];
+  /** Tools the agent can see at all. */
+  tools?: string[];
+  /** Decides each tool call that is not auto-allowed; denies everything when omitted. */
+  canUseTool?: CanUseTool;
 }
 
+const denyAll: CanUseTool = async () => ({ behavior: 'deny', message: 'Tool use is not allowed here. Answer directly.' });
+
 /**
- * One long-lived Claude Code process per tile (streaming input mode), so only
- * the first message pays the cold start.
+ * One long-lived Claude Code process (streaming input mode), so only the
+ * first message pays the cold start.
  */
 export class Session {
   private inbox = new Inbox();
@@ -55,9 +62,10 @@ export class Session {
         cwd: opts.cwd,
         model: opts.model,
         resume: opts.resume,
+        systemPrompt: opts.systemPrompt,
+        tools: opts.tools,
         includePartialMessages: true,
-        // Tool approval cards come in a later phase; until then the agent answers without side effects.
-        canUseTool: async () => ({ behavior: 'deny', message: 'Tool use is not enabled in tiledeck yet. Answer directly.' }),
+        canUseTool: opts.canUseTool ?? denyAll,
       },
     });
     void this.pump();

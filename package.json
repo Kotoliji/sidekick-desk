@@ -1,5 +1,5 @@
 {
-  "name": "tiledeck",
+  "name": "sidekick-desk",
   "version": "0.1.0",
   "scripts": {
     "dev": "electron-vite dev",
@@ -9,11 +9,13 @@
   },
   "author": "Mugivara <kirill30082005@gmail.com>",
   "license": "MIT",
-  "description": "A calm cockpit for parallel Claude sessions on your desktop: each chat is its own window, auto-tiled.",
+  "description": "A personal manager agent that lives in a small window on your Windows desktop: daily plan, prompt help, and (soon) alerts from your Claude Code chats.",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.304",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
@@ -27,5 +29,6 @@
   },
   "private": true,
   "type": "module",
-  "main": "./out/main/index.js"
+  "main": "./out/main/index.js",
+  "productName": "Sidekick"
 }

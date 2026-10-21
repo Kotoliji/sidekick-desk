@@ -1,47 +1,63 @@
-import { app, BrowserWindow, ipcMain, screen, type WebContents } from 'electron';
-import { homedir } from 'node:os';
+import { app, BrowserWindow, ipcMain, screen, shell, type Rectangle } from 'electron';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { Session } from './session';
+import { ensureWorkspace, isInside, kickoff, managerPrompt } from './workspace';
 import { IPC, type TileEvent } from '../shared/protocol';
 
-const CWD = process.env.TILEDECK_CWD ?? homedir();
-const GAP = 12;
-const MAX_TILES = 4;
+const WIDTH = 380;
+const HEIGHT = 640;
+const MARGIN = 16;
 
-interface TileWin {
-  n: number;
-  win: BrowserWindow;
-  session?: Session;
+interface WindowState {
+  bounds?: Rectangle;
+  pinned: boolean;
 }
 
-const tiles: TileWin[] = [];
-let counter = 0;
+const stateFile = () => join(app.getPath('userData'), 'window.json');
 
-/** Lay the open chat windows out as a grid over the primary display's work area. */
-function arrange() {
+function loadState(): WindowState {
+  try {
+    return JSON.parse(readFileSync(stateFile(), 'utf8'));
+  } catch {
+    return { pinned: false };
+  }
+}
+
+function saveState(s: WindowState) {
+  try {
+    writeFileSync(stateFile(), JSON.stringify(s));
+  } catch {
+    /* not fatal: the widget just opens at the default spot next time */
+  }
+}
+
+/** Saved bounds if they are still on a screen, else the right edge of the primary display. */
+function initialBounds(saved?: Rectangle): Rectangle {
+  if (saved) {
+    const area = screen.getDisplayMatching(saved).workArea;
+    const visible = saved.x < area.x + area.width && saved.x + saved.width > area.x && saved.y < area.y + area.height && saved.y >= area.y - 8;
+    if (visible) return saved;
+  }
   const area = screen.getPrimaryDisplay().workArea;
-  const cols = tiles.length <= 2 ? tiles.length : 2;
-  const rows = Math.ceil(tiles.length / cols);
-  const w = Math.floor((area.width - GAP * (cols + 1)) / cols);
-  const h = Math.floor((area.height - GAP * (rows + 1)) / rows);
-  tiles.forEach((t, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    t.win.setBounds({ x: area.x + GAP + col * (w + GAP), y: area.y + GAP + row * (h + GAP), width: w, height: h }, true);
-  });
+  return { x: area.x + area.width - WIDTH - MARGIN, y: area.y + MARGIN, width: WIDTH, height: Math.min(HEIGHT, area.height - 2 * MARGIN) };
 }
 
-function createTile() {
-  if (tiles.length >= MAX_TILES) return;
-  const n = ++counter;
-  const win = new BrowserWindow({
-    width: 560,
-    height: 680,
-    minWidth: 320,
-    minHeight: 240,
+let win: BrowserWindow;
+let session: Session;
+const state = loadState();
+
+function createWidget(dir: string) {
+  win = new BrowserWindow({
+    ...initialBounds(state.bounds),
+    minWidth: 300,
+    minHeight: 360,
     frame: false,
     show: false,
-    title: `tiledeck · Chat ${n}`,
+    alwaysOnTop: state.pinned,
+    title: 'Sidekick',
     backgroundColor: '#00000000',
     backgroundMaterial: 'acrylic', // Windows 11 blur behind the glass theme; ignored elsewhere
     webPreferences: {
@@ -50,45 +66,60 @@ function createTile() {
       sandbox: true,
     },
   });
-  const tile: TileWin = { n, win };
-  tiles.push(tile);
 
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?n=${n}`);
-  else void win.loadFile(fileURLToPath(new URL('../renderer/index.html', import.meta.url)), { query: { n: String(n) } });
+  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
+  else void win.loadFile(fileURLToPath(new URL('../renderer/index.html', import.meta.url)));
 
-  // TILEDECK_HIDDEN renders windows without showing them (automated checks).
-  if (!process.env.TILEDECK_HIDDEN) win.once('ready-to-show', () => win.show());
-  win.on('closed', () => {
-    tile.session?.close();
-    tiles.splice(tiles.indexOf(tile), 1);
-    arrange();
+  // SIDEKICK_HIDDEN renders the window without showing it (automated checks).
+  if (!process.env.SIDEKICK_HIDDEN) win.once('ready-to-show', () => win.show());
+
+  let saveTimer: NodeJS.Timeout | undefined;
+  const remember = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveState({ ...state, bounds: win.getBounds() }), 400);
+  };
+  win.on('move', remember);
+  win.on('resize', remember);
+
+  session = new Session((e: TileEvent) => !win.isDestroyed() && win.webContents.send(IPC.event, e), {
+    cwd: dir,
+    systemPrompt: { type: 'preset', preset: 'claude_code', append: managerPrompt(dir) },
+    tools: ['Read', 'Glob', 'Grep', 'Edit', 'Write'],
+    canUseTool: writeOnlyInside(dir),
   });
-  arrange();
+
+  // Greet once the window can receive the stream.
+  win.webContents.once('did-finish-load', () => session.send(kickoff()));
+  win.on('closed', () => session.close());
 }
 
-function tileFor(sender: WebContents) {
-  return tiles.find((t) => !t.win.isDestroyed() && t.win.webContents === sender);
+/** The manager may read anywhere but writes only to its own folder. */
+function writeOnlyInside(dir: string): CanUseTool {
+  return async (tool, input) => {
+    const path = typeof input.file_path === 'string' ? input.file_path : '';
+    if ((tool === 'Edit' || tool === 'Write') && isInside(dir, path)) return { behavior: 'allow', updatedInput: input };
+    if (tool === 'Read' || tool === 'Glob' || tool === 'Grep') return { behavior: 'allow', updatedInput: input };
+    return { behavior: 'deny', message: `Sidekick may only write inside ${dir}.` };
+  };
 }
-
-function sessionFor(tile: TileWin) {
-  tile.session ??= new Session((e: TileEvent) => {
-    if (!tile.win.isDestroyed()) tile.win.webContents.send(IPC.event, e);
-  }, { cwd: CWD });
-  return tile.session;
-}
-
-ipcMain.on(IPC.send, (e, text: string) => {
-  const tile = tileFor(e.sender);
-  if (tile && typeof text === 'string' && text.trim()) sessionFor(tile).send(text);
-});
-ipcMain.on(IPC.interrupt, (e) => void tileFor(e.sender)?.session?.interrupt());
-ipcMain.on(IPC.newTile, () => createTile());
-ipcMain.on(IPC.minimize, (e) => tileFor(e.sender)?.win.minimize());
-ipcMain.on(IPC.close, (e) => tileFor(e.sender)?.win.close());
 
 app.whenReady().then(() => {
-  createTile();
-  screen.on('display-metrics-changed', arrange);
+  const dir = ensureWorkspace();
+
+  ipcMain.on(IPC.send, (_e, text: string) => typeof text === 'string' && text.trim() && session.send(text));
+  ipcMain.on(IPC.interrupt, () => void session.interrupt());
+  ipcMain.handle(IPC.info, () => ({ pinned: state.pinned, dataDir: dir }));
+  ipcMain.handle(IPC.togglePin, () => {
+    state.pinned = !state.pinned;
+    win.setAlwaysOnTop(state.pinned);
+    saveState({ ...state, bounds: win.getBounds() });
+    return state.pinned;
+  });
+  ipcMain.on(IPC.openFolder, () => void shell.openPath(dir));
+  ipcMain.on(IPC.minimize, () => win.minimize());
+  ipcMain.on(IPC.close, () => win.close());
+
+  createWidget(dir);
 });
 
 app.on('window-all-closed', () => app.quit());
