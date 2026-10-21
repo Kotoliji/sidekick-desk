@@ -467,6 +467,198 @@ button {
   color: var(--alert);
 }
 
+/* ── Pet window ─────────────────────────────────────────────────────
+   Transparent, always on top: the octopus floats in the bottom-right
+   corner and speech bubbles open up and to the left of it. */
+
+[data-view='pet'] body {
+  background: transparent;
+}
+
+[data-view='pet'] body::before {
+  display: none;
+}
+
+.pet-root {
+  position: fixed;
+  inset: 0;
+  font-family: 'Geist', system-ui, sans-serif;
+}
+
+.octo {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  width: 100px;
+  height: 90px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.octo:active {
+  cursor: grabbing;
+}
+
+.octo-float {
+  animation: float 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 2px 0 rgba(43, 27, 46, 0.25));
+}
+
+.octo-sprite {
+  display: block;
+  width: 100px;
+  height: 90px;
+}
+
+.octo.is-excited .octo-float {
+  animation: hop 0.35s ease-out 2;
+}
+
+.octo-shadow {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: -6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(20, 10, 25, 0.28);
+  animation: shadow 2.6s ease-in-out infinite;
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes shadow {
+  50% {
+    transform: scaleX(0.8);
+    opacity: 0.6;
+  }
+}
+
+@keyframes hop {
+  40% {
+    transform: translateY(-14px) scale(1.05, 0.95);
+  }
+}
+
+.octo-think {
+  position: absolute;
+  top: -14px;
+  right: 6px;
+  display: flex;
+  gap: 3px;
+}
+
+.octo-think i {
+  width: 6px;
+  height: 6px;
+  background: #2b1b2e;
+  animation: pulse 0.9s steps(2) infinite;
+}
+
+.octo-think i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.octo-think i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Speech bubble: a cream card with a pixel outline and a tail toward the octopus. */
+.bubble {
+  position: absolute;
+  right: 24px;
+  bottom: 108px;
+  max-width: 268px;
+  min-width: 140px;
+  background: #fff7f0;
+  color: #2b1b2e;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 2px #2b1b2e,
+    4px 4px 0 2px rgba(43, 27, 46, 0.35);
+  animation: pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom right;
+}
+
+.bubble::after {
+  content: '';
+  position: absolute;
+  right: 34px;
+  bottom: -9px;
+  width: 12px;
+  height: 12px;
+  background: #fff7f0;
+  box-shadow: 2px 2px 0 0 #2b1b2e;
+  transform: rotate(45deg);
+}
+
+.bubble-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 26px 10px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  color: inherit;
+}
+
+.bubble-title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font: 600 10px/1.2 'Geist Mono', ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e0607a;
+}
+
+.bubble-more {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ffc4ce;
+  color: #2b1b2e;
+}
+
+.bubble-text {
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bubble-close {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: #9a7f8c;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.bubble-close:hover {
+  color: #2b1b2e;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6) translateY(8px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before {

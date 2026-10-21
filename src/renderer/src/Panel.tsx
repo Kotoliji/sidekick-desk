@@ -17,14 +17,10 @@ function loadTheme(): Theme {
 
 const today = () => new Date().toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
 
-export function App() {
+/** The chat window the octopus unfolds into. */
+export function Panel() {
   const { tile, send, interrupt } = useChat();
   const [theme, setTheme] = useState<Theme>(loadTheme);
-  const [pinned, setPinned] = useState(false);
-
-  useEffect(() => {
-    void window.sidekick.info().then((i) => setPinned(i.pinned));
-  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -43,17 +39,7 @@ export function App() {
       <button className="win-btn" onClick={() => setTheme(theme === 'aurora' ? 'hud' : 'aurora')} title={`Theme: ${theme}`}>
         ◐
       </button>
-      <button
-        className={`win-btn ${pinned ? 'is-on' : ''}`}
-        onClick={() => void window.sidekick.togglePin().then(setPinned)}
-        title={pinned ? 'Unpin (stop staying on top)' : 'Pin on top of other windows'}
-      >
-        ⊼
-      </button>
-      <button className="win-btn" onClick={() => window.sidekick.minimize()} title="Minimize">
-        –
-      </button>
-      <button className="win-btn win-close" onClick={() => window.sidekick.close()} title="Close">
+      <button className="win-btn win-close" onClick={() => window.sidekick.hidePanel()} title="Hide (the octopus stays)">
         ×
       </button>
     </div>

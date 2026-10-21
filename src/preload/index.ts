@@ -1,19 +1,24 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { IPC, type SidekickApi, type TileEvent } from '../shared/protocol';
+import { IPC, type SidekickApi } from '../shared/protocol';
+
+function subscribe<T>(channel: string, cb: (payload: T) => void) {
+  const listener = (_: IpcRendererEvent, payload: T) => cb(payload);
+  ipcRenderer.on(channel, listener);
+  return () => void ipcRenderer.off(channel, listener);
+}
 
 const api: SidekickApi = {
   send: (text) => ipcRenderer.send(IPC.send, text),
   interrupt: () => ipcRenderer.send(IPC.interrupt),
-  onEvent(cb) {
-    const listener = (_: IpcRendererEvent, e: TileEvent) => cb(e);
-    ipcRenderer.on(IPC.event, listener);
-    return () => ipcRenderer.off(IPC.event, listener);
-  },
-  info: () => ipcRenderer.invoke(IPC.info),
-  togglePin: () => ipcRenderer.invoke(IPC.togglePin),
+  onEvent: (cb) => subscribe(IPC.event, cb),
   openFolder: () => ipcRenderer.send(IPC.openFolder),
-  minimize: () => ipcRenderer.send(IPC.minimize),
-  close: () => ipcRenderer.send(IPC.close),
+  hidePanel: () => ipcRenderer.send(IPC.hidePanel),
+  onNote: (cb) => subscribe(IPC.note, cb),
+  onStatus: (cb) => subscribe(IPC.status, cb),
+  moveBy: (dx, dy) => ipcRenderer.send(IPC.moveBy, dx, dy),
+  setInteractive: (on) => ipcRenderer.send(IPC.interactive, on),
+  togglePanel: () => ipcRenderer.send(IPC.togglePanel),
+  petMenu: () => ipcRenderer.send(IPC.petMenu),
 };
 
 contextBridge.exposeInMainWorld('sidekick', api);
