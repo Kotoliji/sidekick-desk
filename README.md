@@ -13,13 +13,16 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 - Keeps `tasks.md` current as you talk ("add…", "done with…", "move to backlog").
 - Writes prompts for your other chats as code blocks with a one-click copy button.
 - Watches your Claude Code chats (VS Code or terminal): a green bubble when one finishes, a yellow one when it needs your permission. Click the bubble to jump to that project in VS Code.
-- Stoppers: a reminder when a chat has waited for you 10 minutes (writing in that chat cancels it), and a purple bubble when a chat's context passes 150k tokens. Click that one and Sidekick reads the end of the chat and writes a short summary plus a prompt to continue in a fresh chat.
+- Stoppers: a reminder when a chat has waited for you 10 minutes (writing in that chat cancels it), and a purple bubble when a chat's conversation has grown by 100k tokens (its fixed starting size, which depends on your tools and MCP servers, is left out). Click that one and Sidekick reads the end of the chat and writes a short summary plus a prompt to continue in a fresh chat.
+- File guard: when a chat is about to edit a file that a different chat edited in the last 20 minutes, the edit is stopped and Claude Code asks you first (or refuses outright, if you prefer); a red bubble tells you which chats collided. Edits made through shell commands are not covered.
+- A manager, not a coder: it runs in its own environment (own prompt, no plugins or CLAUDE.md, a lighter model) and answers as goal → one next step → a ready prompt → how to check. It turns implementation requests into prompts for your Claude Code chats and flags plans that are too big for a day.
+- Memory in files, not in context: when its context passes a limit, at a new day, or on **Wrap up now**, it writes 3-5 lines to `journal/` and a "Tomorrow" list to `tasks.md`, then starts fresh from those files.
 
 ## Connecting your Claude Code chats
 
-Right-click the octopus → **Connect Claude Code chats**. This adds three hook entries (`Stop`, `Notification`, `UserPromptSubmit`) to `~/.claude/settings.json`, keeping a backup at `settings.json.sidekick-backup`, and leaves the rest of the file untouched. Unticking it removes them. New chats pick it up; reload VS Code windows that were already open.
+Right-click the octopus → **Connect Claude Code chats**. This adds hook entries (`Stop`, `Notification`, `UserPromptSubmit`, and `PreToolUse`/`PostToolUse` for file-editing tools only) to `~/.claude/settings.json`, keeping a backup at `settings.json.sidekick-backup`, and leaves the rest of the file untouched. Unticking it removes them. New chats pick it up; reload VS Code windows that were already open.
 
-The hook is a tiny dependency-free script, `~/.sidekick/hook.cjs`, that appends one JSON line per event to `~/.sidekick/events.jsonl`. Sidekick tails that file, so the hook never blocks Claude Code and events are not lost while Sidekick is closed. The manager agent can read the same log when you ask it what is going on.
+The hook is a tiny dependency-free script, `~/.sidekick/hook.cjs`, that appends one JSON line per event to `~/.sidekick/events.jsonl` and keeps file claims in `~/.sidekick/locks.json`. Sidekick tails that file, so the hook never blocks Claude Code and events are not lost while Sidekick is closed. The manager agent can read the same log when you ask it what is going on.
 
 ## Your files
 
@@ -29,7 +32,8 @@ Sidekick's memory is plain Markdown in `Documents\Sidekick` (the ▤ button open
 |---|---|
 | `profile.md` | Who you are and how you like to be helped. Read at every start. |
 | `tasks.md` | Today's plan and the backlog, as `- [ ]` checkboxes. |
-| `config.json` | Stopper thresholds: `remindAfterMinutes` (10), `longChatTokens` (150000). Applied without a restart. |
+| `journal/YYYY-MM-DD.md` | The manager's short notes, written before each context reset. |
+| `config.json` | Settings, applied without a restart (the model on the next session): `remindAfterMinutes` (10), `longChatTokens` (100000), `managerModel` ("sonnet"), `managerContextLimit` (40000), `fileGuard` ("ask", "deny" or "off"), `fileGuardMinutes` (20). |
 
 The agent may read any file but can only write inside this folder.
 

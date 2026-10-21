@@ -8,9 +8,20 @@ export interface SidekickConfig extends StopperConfig {
   managerModel: string;
   /** Past this many tokens the manager writes its journal and starts with a fresh context. */
   managerContextLimit: number;
+  /** Two chats editing one file: "ask" the user, "deny" the edit, or "off". */
+  fileGuard: 'ask' | 'deny' | 'off';
+  /** How long a chat keeps its claim on a file it edited. */
+  fileGuardMinutes: number;
 }
 
-const DEFAULT_CONFIG: SidekickConfig = { remindAfterMinutes: 10, longChatTokens: 150_000, managerModel: 'sonnet', managerContextLimit: 40_000 };
+const DEFAULT_CONFIG: SidekickConfig = {
+  remindAfterMinutes: 10,
+  longChatTokens: 100_000,
+  managerModel: 'sonnet',
+  managerContextLimit: 40_000,
+  fileGuard: 'ask',
+  fileGuardMinutes: 20,
+};
 
 /** Plain-file home of the manager: the user edits these files by hand too. */
 export function dataDir() {
@@ -91,7 +102,7 @@ Keep it short: at most 8 lines outside code blocks, no tables, no preamble. Repl
 }
 
 export function handoffPrompt(project: string, cwd: string, tokens: number, turns: string) {
-  return `[Long chat] The user's Claude Code chat in "${project}" (${cwd}) has grown to about ${Math.round(tokens / 1000)}k tokens of context, so it is time to continue in a fresh chat.
+  return `[Long chat] The user's Claude Code chat in "${project}" (${cwd}) has grown by about ${Math.round(tokens / 1000)}k tokens of conversation, so it is time to continue in a fresh chat.
 Below are its last turns. Reply with:
 1. 3-6 short bullets: where that work stands and what is still open.
 2. One fenced prompt the user can paste into a new Claude Code chat in the same folder so it picks up the work without the old context (goal, current state, next step, key files or decisions).

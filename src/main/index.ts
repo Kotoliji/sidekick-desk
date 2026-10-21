@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
-import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeHookScript, type BridgeEvent } from './hooks';
+import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeGuardSettings, writeHookScript, type BridgeEvent } from './hooks';
 import { Session } from './session';
 import { Stoppers, type Alert } from './stoppers';
 import { recentTurns } from './transcript';
@@ -169,7 +169,7 @@ function onAlert(a: Alert) {
     notify('waiting', project, text, { type: 'vscode', folder: a.cwd });
   } else {
     const k = Math.round(a.tokens / 1000);
-    notify('long', project, `This chat is at ~${k}k tokens. Click for a summary and a prompt to continue in a fresh chat.`, {
+    notify('long', project, `This chat's conversation has grown by ~${k}k tokens. Click for a summary and a prompt to continue in a fresh chat.`, {
       type: 'handoff',
       cwd: a.cwd,
       transcript: a.transcript,
@@ -193,6 +193,8 @@ function onBridgeEvent(e: BridgeEvent, dir: string, stoppers: Stoppers) {
   if (e.event === 'Stop') notify('done', project, e.last ? summarize(e.last, 140) : 'Answer ready', open);
   // idle_prompt repeats a Stop a minute later; only real requests get a bubble.
   else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', project, e.message ?? 'Needs you', open);
+  else if (e.event === 'Conflict')
+    notify('conflict', project, `Stopped an edit of ${basename(e.file ?? '')}: the chat in ${basename(e.other ?? '')} edited it minutes ago.`, open);
   stoppers.onEvent(e);
 }
 
@@ -376,8 +378,13 @@ else {
     startSession(dir);
     if (hooksInstalled()) writeHookScript(); // keep the script current after updates
     const stoppers = new Stoppers(loadConfig, onAlert);
+    const syncGuard = () => {
+      const c = loadConfig();
+      writeGuardSettings({ mode: c.fileGuard, minutes: c.fileGuardMinutes });
+    };
+    syncGuard();
     tailEvents((e) => onBridgeEvent(e, dir, stoppers));
-    setInterval(() => stoppers.tick(), Number(process.env.SIDEKICK_TICK_MS ?? 30_000));
+    setInterval(() => (stoppers.tick(), syncGuard()), Number(process.env.SIDEKICK_TICK_MS ?? 30_000));
     // Greet once both windows can receive the stream.
     let loaded = 0;
     for (const w of [pet, panel]) w.webContents.once('did-finish-load', () => ++loaded === 2 && session.send(kickoff(dir)));

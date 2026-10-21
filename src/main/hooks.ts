@@ -1,10 +1,13 @@
 /**
  * Bridge from Claude Code (VS Code, terminal) to Sidekick.
  *
- * Claude Code runs `hook.cjs` on Stop and Notification events; the script
- * appends one JSON line per event to `events.jsonl`, which Sidekick tails.
- * A file instead of a socket means events still land while Sidekick is closed
- * and the hook never blocks Claude Code.
+ * Claude Code runs `hook.cjs` on its events; the script appends one JSON line
+ * per event to `events.jsonl`, which Sidekick tails. A file instead of a socket
+ * means events still land while Sidekick is closed and the hook never waits on it.
+ *
+ * The same script guards files: before a chat edits a file that another chat
+ * edited within the last minutes (tracked in `locks.json`), it stops the edit
+ * and makes Claude Code ask the user, and logs a "Conflict" event.
  */
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, unwatchFile, watchFile, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -13,43 +16,107 @@ import { join } from 'node:path';
 export const BRIDGE_DIR = process.env.SIDEKICK_BRIDGE ?? join(homedir(), '.sidekick');
 export const EVENTS_FILE = join(BRIDGE_DIR, 'events.jsonl');
 const HOOK_FILE = join(BRIDGE_DIR, 'hook.cjs');
+const GUARD_FILE = join(BRIDGE_DIR, 'guard.json');
 const SETTINGS_FILE = join(homedir(), '.claude', 'settings.json');
+const FILE_TOOLS = 'Edit|Write|MultiEdit|NotebookEdit';
 // UserPromptSubmit only tells Sidekick the user is back in a chat; it adds nothing to the prompt.
-const EVENTS = ['Stop', 'Notification', 'UserPromptSubmit'] as const;
+// The tool hooks fire only for file-editing tools.
+const HOOKS: { event: string; matcher?: string }[] = [
+  { event: 'Stop' },
+  { event: 'Notification' },
+  { event: 'UserPromptSubmit' },
+  { event: 'PreToolUse', matcher: FILE_TOOLS },
+  { event: 'PostToolUse', matcher: FILE_TOOLS },
+];
 
 /** One line of events.jsonl. */
 export interface BridgeEvent {
   ts: number;
-  event: (typeof EVENTS)[number];
+  event: 'Stop' | 'Notification' | 'UserPromptSubmit' | 'Conflict';
   cwd: string;
   session: string;
   transcript?: string;
   message?: string;
   type?: string;
   last?: string;
+  /** Conflict: the file, and the project of the chat that edited it first. */
+  file?: string;
+  other?: string;
+}
+
+export interface GuardSettings {
+  /** ask: Claude Code asks the user; deny: the edit is refused; off: no guard. */
+  mode: 'ask' | 'deny' | 'off';
+  /** How long a chat keeps its claim on a file after editing it. */
+  minutes: number;
+}
+
+/** The hook reads the guard settings from the bridge folder; Sidekick keeps them in sync with config.json. */
+export function writeGuardSettings(g: GuardSettings) {
+  mkdirSync(BRIDGE_DIR, { recursive: true });
+  const next = JSON.stringify(g);
+  if (!existsSync(GUARD_FILE) || readFileSync(GUARD_FILE, 'utf8') !== next) writeFileSync(GUARD_FILE, next);
 }
 
 // Plain CommonJS with no dependencies: it runs under whatever `node` Claude Code finds.
-const HOOK_SOURCE = `// Written by Sidekick. Appends Claude Code hook events to events.jsonl.
+const HOOK_SOURCE = `// Written by Sidekick. Logs Claude Code hook events and guards files edited by two chats.
 const fs = require('fs');
 const path = require('path');
 if (process.env.SIDEKICK_SELF) process.exit(0);
+
+const log = (line) => fs.appendFileSync(path.join(__dirname, 'events.jsonl'), JSON.stringify(line) + '\\n');
+const readJson = (file, fallback) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return fallback;
+  }
+};
+const writeJson = (file, value) => {
+  const tmp = file + '.' + process.pid + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(value));
+  fs.renameSync(tmp, file);
+};
+
+function guard(i) {
+  const g = readJson(path.join(__dirname, 'guard.json'), { mode: 'ask', minutes: 20 });
+  const file = i.tool_input && (i.tool_input.file_path || i.tool_input.notebook_path);
+  if (g.mode === 'off' || !file) return;
+  const key = path.resolve(i.cwd || '', file).toLowerCase();
+  const locksFile = path.join(__dirname, 'locks.json');
+  const locks = readJson(locksFile, {});
+  const now = Date.now();
+  for (const k of Object.keys(locks)) if (now - locks[k].ts > g.minutes * 60000) delete locks[k];
+  const held = locks[key];
+  if (i.hook_event_name === 'PreToolUse' && held && held.session !== i.session_id) {
+    const mins = Math.max(1, Math.round((now - held.ts) / 60000));
+    log({ ts: now, event: 'Conflict', cwd: i.cwd, session: i.session_id, file, other: held.cwd });
+    const reason = 'Sidekick: ' + file + ' was edited ' + mins + ' min ago by another Claude Code chat (' + path.basename(held.cwd || '') + '). Two chats editing one file can overwrite each other. Stop and check with the user before changing this file.';
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: g.mode === 'deny' ? 'deny' : 'ask', permissionDecisionReason: reason } }));
+  } else {
+    // A free file, or an edit that went ahead (PostToolUse, e.g. after the user allowed it): this chat holds it now.
+    locks[key] = { session: i.session_id, cwd: i.cwd, ts: now };
+  }
+  writeJson(locksFile, locks);
+}
+
 let raw = '';
 process.stdin.on('data', (c) => (raw += c));
 process.stdin.on('end', () => {
   try {
     const i = JSON.parse(raw);
-    const line = {
-      ts: Date.now(),
-      event: i.hook_event_name,
-      cwd: i.cwd,
-      session: i.session_id,
-      transcript: i.transcript_path,
-      message: i.message,
-      type: i.notification_type,
-      last: typeof i.last_assistant_message === 'string' ? i.last_assistant_message.slice(0, 800) : undefined,
-    };
-    fs.appendFileSync(path.join(__dirname, 'events.jsonl'), JSON.stringify(line) + '\\n');
+    if (i.hook_event_name === 'PreToolUse' || i.hook_event_name === 'PostToolUse') guard(i);
+    else
+      log({
+        ts: Date.now(),
+        event: i.hook_event_name,
+        cwd: i.cwd,
+        session: i.session_id,
+        transcript: i.transcript_path,
+        message: i.message,
+        type: i.notification_type,
+        last: typeof i.last_assistant_message === 'string' ? i.last_assistant_message.slice(0, 800) : undefined,
+      });
   } catch {}
   process.exit(0);
 });
@@ -73,7 +140,7 @@ function readSettings(): Settings {
 export function hooksInstalled() {
   try {
     const hooks = readSettings().hooks ?? {};
-    return EVENTS.every((e) => hooks[e]?.some(isOurs));
+    return HOOKS.every((h) => hooks[h.event]?.some(isOurs));
   } catch {
     return false;
   }
@@ -88,11 +155,12 @@ export function setHooks(on: boolean, { dryRun = false } = {}) {
   const before = existsSync(SETTINGS_FILE) ? readFileSync(SETTINGS_FILE, 'utf8') : '{}\n';
   const settings = readSettings();
   const hooks = { ...(settings.hooks ?? {}) };
-  for (const e of EVENTS) {
-    const rest = (hooks[e] ?? []).filter((entry) => !isOurs(entry));
-    const next = on ? [...rest, { hooks: [{ type: 'command', command: hookCommand(), timeout: 10 }] }] : rest;
-    if (next.length) hooks[e] = next;
-    else delete hooks[e];
+  for (const { event, matcher } of HOOKS) {
+    const rest = (hooks[event] ?? []).filter((entry) => !isOurs(entry));
+    const ours = { ...(matcher && { matcher }), hooks: [{ type: 'command', command: hookCommand(), timeout: 10 }] };
+    const next = on ? [...rest, ours] : rest;
+    if (next.length) hooks[event] = next;
+    else delete hooks[event];
   }
   const updated: Settings = { ...settings, hooks };
   if (!Object.keys(hooks).length) delete updated.hooks;

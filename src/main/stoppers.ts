@@ -1,13 +1,14 @@
 /**
  * Stoppers: gentle nudges about the user's Claude Code chats, built from hook events.
  * - a chat has waited for the user too long (after an answer or a permission request);
- * - a chat's context has grown past a limit, so a fresh chat with a summary is due.
+ * - a chat's conversation has grown past a limit, so a fresh chat with a summary is due.
  */
 import type { BridgeEvent } from './hooks';
-import { contextTokens } from './transcript';
+import { conversationTokens } from './transcript';
 
 export interface StopperConfig {
   remindAfterMinutes: number;
+  /** Warn when a chat's conversation (beyond its fixed starting size) has grown this much. */
   longChatTokens: number;
 }
 
@@ -67,7 +68,7 @@ export class Stoppers {
 
   private checkLength(chat: Chat) {
     if (!chat.transcript) return;
-    const tokens = contextTokens(chat.transcript);
+    const tokens = conversationTokens(chat.transcript);
     const limit = this.config().longChatTokens;
     if (!tokens || tokens < limit) return;
     // Warn when crossing the limit, then again after every further half-limit of growth.

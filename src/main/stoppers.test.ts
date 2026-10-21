@@ -7,7 +7,7 @@ const MIN = 60_000;
 
 function setup() {
   const alerts: Alert[] = [];
-  const stoppers = new Stoppers(() => ({ remindAfterMinutes: 10, longChatTokens: 150_000 }), (a) => alerts.push(a));
+  const stoppers = new Stoppers(() => ({ remindAfterMinutes: 10, longChatTokens: 100_000 }), (a) => alerts.push(a));
   const ev = (event: BridgeEvent['event'], session: string, ts: number, extra: Partial<BridgeEvent> = {}) =>
     stoppers.onEvent({ ts, event, cwd: `D:/p/${session}`, session, ...extra });
   return { alerts, stoppers, ev };

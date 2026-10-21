@@ -13,15 +13,17 @@ interface Line {
   };
 }
 
-function tailLines(path: string, bytes: number): Line[] {
+/** Parsed lines from the end (`fromEnd`) or the start of a transcript, reading at most `bytes`. */
+function readLines(path: string, bytes: number, fromEnd = true): Line[] {
   const size = statSync(path).size;
   const len = Math.min(size, bytes);
   const buf = Buffer.alloc(len);
   const fd = openSync(path, 'r');
-  readSync(fd, buf, 0, len, size - len);
+  readSync(fd, buf, 0, len, fromEnd ? size - len : 0);
   closeSync(fd);
   const lines = buf.toString('utf8').split('\n');
-  if (len < size) lines.shift(); // first line is cut mid-way
+  // Drop the line cut mid-way by the read window.
+  if (len < size) fromEnd ? lines.shift() : lines.pop();
   return lines.flatMap((l) => {
     try {
       return [JSON.parse(l) as Line];
@@ -31,18 +33,24 @@ function tailLines(path: string, bytes: number): Line[] {
   });
 }
 
-/** Tokens in the chat's context as of its last answer (what the model actually saw). */
-export function contextTokens(path: string): number | undefined {
+const contextOf = (l: Line) => {
+  const u = l.type === 'assistant' && !l.isSidechain ? l.message?.usage : undefined;
+  return u && (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+};
+
+/**
+ * How much the conversation itself has grown, in tokens: the context of the last
+ * answer minus the context of the first one. The starting size (system prompt, tools,
+ * MCP servers, CLAUDE.md) differs a lot between setups, so it is left out.
+ */
+export function conversationTokens(path: string): number | undefined {
   try {
-    const lines = tailLines(path, 512_000);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const u = lines[i].type === 'assistant' && !lines[i].isSidechain ? lines[i].message?.usage : undefined;
-      if (u) return (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-    }
+    const last = readLines(path, 512_000).reverse().map(contextOf).find(Boolean);
+    const first = readLines(path, 512_000, false).map(contextOf).find(Boolean);
+    return last && first ? last - first : undefined;
   } catch {
-    /* transcript moved or unreadable */
+    return undefined; // transcript moved or unreadable
   }
-  return undefined;
 }
 
 type Content = NonNullable<Line['message']>['content'];
@@ -54,7 +62,7 @@ const textOf = (content: Content) =>
 export function recentTurns(path: string, count = 14, maxChars = 600): string {
   const turns: string[] = [];
   try {
-    const lines = tailLines(path, 1_500_000);
+    const lines = readLines(path, 1_500_000);
     for (let i = lines.length - 1; i >= 0 && turns.length < count; i--) {
       const l = lines[i];
       if (l.isSidechain || (l.type !== 'user' && l.type !== 'assistant')) continue;

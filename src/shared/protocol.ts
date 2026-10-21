@@ -14,10 +14,10 @@ export type TileEvent =
   /** A quiet system line in the chat (e.g. the context was refreshed). */
   | { t: 'notice'; text: string };
 
-/** Main → pet: a speech bubble. `done`/`waiting`/`long` come from Claude Code chats. */
+/** Main → pet: a speech bubble. All kinds but `sidekick` come from Claude Code chats. */
 export interface PetNote {
   id: number;
-  kind: 'sidekick' | 'done' | 'waiting' | 'long';
+  kind: 'sidekick' | 'done' | 'waiting' | 'long' | 'conflict';
   title: string;
   text: string;
 }

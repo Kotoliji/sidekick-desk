@@ -659,6 +659,18 @@ button {
   color: #6d28d9;
 }
 
+.bubble[data-kind='conflict'] {
+  background: #ffe1e1;
+}
+
+.bubble[data-kind='conflict']::after {
+  background: #ffe1e1;
+}
+
+.bubble[data-kind='conflict'] .bubble-title {
+  color: #c81e1e;
+}
+
 .bubble-more {
   padding: 0 5px;
   border-radius: 999px;
