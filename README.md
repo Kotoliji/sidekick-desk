@@ -13,10 +13,11 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 - Keeps `tasks.md` current as you talk ("add…", "done with…", "move to backlog").
 - Writes prompts for your other chats as code blocks with a one-click copy button.
 - Watches your Claude Code chats (VS Code or terminal): a green bubble when one finishes, a yellow one when it needs your permission. Click the bubble to jump to that project in VS Code.
+- Stoppers: a reminder when a chat has waited for you 10 minutes (writing in that chat cancels it), and a purple bubble when a chat's context passes 150k tokens. Click that one and Sidekick reads the end of the chat and writes a short summary plus a prompt to continue in a fresh chat.
 
 ## Connecting your Claude Code chats
 
-Right-click the octopus → **Connect Claude Code chats**. This adds two hook entries (`Stop`, `Notification`) to `~/.claude/settings.json`, keeping a backup at `settings.json.sidekick-backup`, and leaves the rest of the file untouched. Unticking it removes them. New chats pick it up; reload VS Code windows that were already open.
+Right-click the octopus → **Connect Claude Code chats**. This adds three hook entries (`Stop`, `Notification`, `UserPromptSubmit`) to `~/.claude/settings.json`, keeping a backup at `settings.json.sidekick-backup`, and leaves the rest of the file untouched. Unticking it removes them. New chats pick it up; reload VS Code windows that were already open.
 
 The hook is a tiny dependency-free script, `~/.sidekick/hook.cjs`, that appends one JSON line per event to `~/.sidekick/events.jsonl`. Sidekick tails that file, so the hook never blocks Claude Code and events are not lost while Sidekick is closed. The manager agent can read the same log when you ask it what is going on.
 
@@ -28,6 +29,7 @@ Sidekick's memory is plain Markdown in `Documents\Sidekick` (the ▤ button open
 |---|---|
 | `profile.md` | Who you are and how you like to be helped. Read at every start. |
 | `tasks.md` | Today's plan and the backlog, as `- [ ]` checkboxes. |
+| `config.json` | Stopper thresholds: `remindAfterMinutes` (10), `longChatTokens` (150000). Applied without a restart. |
 
 The agent may read any file but can only write inside this folder.
 
@@ -38,6 +40,7 @@ Requirements: Windows 10/11, Node 20+, and Claude Code signed in on this machine
 ```bash
 npm install
 npm run dev
+npm test           # stopper logic
 ```
 
 | Env var | Default | Meaning |

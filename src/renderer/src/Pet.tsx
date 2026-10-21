@@ -3,8 +3,14 @@ import type { PetNote, TileStatus } from '../../shared/protocol';
 import { frame, PALETTE, SPRITE_H, SPRITE_W } from './octopus';
 
 // A chat waiting on the user matters more than a finished answer, so it stays up longer.
-const NOTE_MS = { sidekick: 9000, done: 12000, waiting: 30000 } as const;
-const NOTE_ICON = { sidekick: '', done: '✓ ', waiting: '! ' } as const;
+const NOTE_MS = { sidekick: 9000, done: 12000, waiting: 30000, long: 30000 } as const;
+const NOTE_ICON = { sidekick: '', done: '✓ ', waiting: '! ', long: '≡ ' } as const;
+const NOTE_HINT = {
+  sidekick: 'Open the chat',
+  done: 'Open this project in VS Code',
+  waiting: 'Open this project in VS Code',
+  long: 'Get a summary and a fresh-chat prompt',
+} as const;
 const DRAG_THRESHOLD = 3;
 
 function Sprite({ blink, legs }: { blink: boolean; legs: 'a' | 'b' }) {
@@ -118,7 +124,7 @@ export function Pet() {
               setNotes((q) => q.slice(1));
               window.sidekick.openNote(current.id);
             }}
-            title={current.kind === 'sidekick' ? 'Open the chat' : 'Open this project in VS Code'}
+            title={NOTE_HINT[current.kind]}
           >
             <span className="bubble-title">
               {NOTE_ICON[current.kind]}

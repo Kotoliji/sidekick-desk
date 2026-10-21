@@ -14,14 +14,16 @@ export const BRIDGE_DIR = process.env.SIDEKICK_BRIDGE ?? join(homedir(), '.sidek
 export const EVENTS_FILE = join(BRIDGE_DIR, 'events.jsonl');
 const HOOK_FILE = join(BRIDGE_DIR, 'hook.cjs');
 const SETTINGS_FILE = join(homedir(), '.claude', 'settings.json');
-const EVENTS = ['Stop', 'Notification'] as const;
+// UserPromptSubmit only tells Sidekick the user is back in a chat; it adds nothing to the prompt.
+const EVENTS = ['Stop', 'Notification', 'UserPromptSubmit'] as const;
 
 /** One line of events.jsonl. */
 export interface BridgeEvent {
   ts: number;
-  event: 'Stop' | 'Notification';
+  event: (typeof EVENTS)[number];
   cwd: string;
   session: string;
+  transcript?: string;
   message?: string;
   type?: string;
   last?: string;
@@ -42,6 +44,7 @@ process.stdin.on('end', () => {
       event: i.hook_event_name,
       cwd: i.cwd,
       session: i.session_id,
+      transcript: i.transcript_path,
       message: i.message,
       type: i.notification_type,
       last: typeof i.last_assistant_message === 'string' ? i.last_assistant_message.slice(0, 800) : undefined,

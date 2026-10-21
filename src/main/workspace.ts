@@ -1,6 +1,9 @@
 import { app } from 'electron';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, isAbsolute } from 'node:path';
+import type { StopperConfig } from './stoppers';
+
+const DEFAULT_CONFIG: StopperConfig = { remindAfterMinutes: 10, longChatTokens: 150_000 };
 
 /** Plain-file home of the manager: the user edits these files by hand too. */
 export function dataDir() {
@@ -23,7 +26,17 @@ Sidekick reads this file at every start. Write it in your own words.
 
 ## Backlog
 `,
+  'config.json': `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
 };
+
+/** Read on every use, so edits to config.json apply without a restart. */
+export function loadConfig(): StopperConfig {
+  try {
+    return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(join(dataDir(), 'config.json'), 'utf8')) };
+  } catch {
+    return DEFAULT_CONFIG;
+  }
+}
 
 export function ensureWorkspace() {
   const dir = dataDir();
@@ -67,6 +80,16 @@ The window is narrow: keep replies short, use short markdown lists, no tables.
 When you write a prompt for another chat, put it in a single fenced code block so it can be copied in one click.
 Reply in the user's language.
 `;
+}
+
+export function handoffPrompt(project: string, cwd: string, tokens: number, turns: string) {
+  return `[Long chat] The user's Claude Code chat in "${project}" (${cwd}) has grown to about ${Math.round(tokens / 1000)}k tokens of context, so it is time to continue in a fresh chat.
+Below are its last turns. Reply with:
+1. 3-6 short bullets: where that work stands and what is still open.
+2. One fenced prompt the user can paste into a new Claude Code chat in the same folder so it picks up the work without the old context (goal, current state, next step, key files or decisions).
+
+--- last turns ---
+${turns || '(the transcript could not be read; ask the user what the chat was about)'}`;
 }
 
 export function kickoff(now = new Date()) {

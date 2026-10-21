@@ -634,6 +634,18 @@ button {
   color: #c2410c;
 }
 
+.bubble[data-kind='long'] {
+  background: #efe8ff;
+}
+
+.bubble[data-kind='long']::after {
+  background: #efe8ff;
+}
+
+.bubble[data-kind='long'] .bubble-title {
+  color: #6d28d9;
+}
+
 .bubble-more {
   padding: 0 5px;
   border-radius: 999px;

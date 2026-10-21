@@ -8,12 +8,14 @@ export type TileEvent =
   | { t: 'delta'; text: string }
   | { t: 'tool'; name: string }
   | { t: 'done'; sessionId: string; ms: number; costUsd?: number }
-  | { t: 'error'; message: string };
+  | { t: 'error'; message: string }
+  /** A request Sidekick sent on the user's behalf (e.g. a handoff), shown as a user message. */
+  | { t: 'user'; text: string };
 
-/** Main → pet: a speech bubble. `done`/`waiting` come from Claude Code chats. */
+/** Main → pet: a speech bubble. `done`/`waiting`/`long` come from Claude Code chats. */
 export interface PetNote {
   id: number;
-  kind: 'sidekick' | 'done' | 'waiting';
+  kind: 'sidekick' | 'done' | 'waiting' | 'long';
   title: string;
   text: string;
 }

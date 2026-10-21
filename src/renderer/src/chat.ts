@@ -46,6 +46,8 @@ function reducer(tile: TileState, action: Action): TileState {
       return { ...tile, lastMs: e.ms };
     case 'error':
       return { ...tile, error: e.message };
+    case 'user':
+      return reducer(tile, { type: 'user', text: e.text });
   }
 }
 

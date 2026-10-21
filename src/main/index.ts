@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { EVENTS_FILE, hooksInstalled, setHooks, tailEvents, writeHookScript, type BridgeEvent } from './hooks';
 import { Session } from './session';
-import { ensureWorkspace, isInside, kickoff, managerPrompt } from './workspace';
+import { Stoppers, type Alert } from './stoppers';
+import { recentTurns } from './transcript';
+import { ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt } from './workspace';
 import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
 
 // The pet window is mostly transparent: the octopus sits in its bottom-right
@@ -62,8 +64,9 @@ let pet: BrowserWindow;
 let panel: BrowserWindow;
 let session: Session;
 let noteId = 0;
-/** Project folder behind each bubble that came from a Claude Code chat. */
-const noteTargets = new Map<number, string>();
+/** What clicking a bubble does, for bubbles that are about a Claude Code chat. */
+type NoteAction = { type: 'vscode'; folder: string } | { type: 'handoff'; cwd: string; transcript: string; tokens: number };
+const noteActions = new Map<number, NoteAction>();
 
 function createPet() {
   const area = screen.getPrimaryDisplay().workArea;
@@ -140,10 +143,39 @@ function togglePanel() {
   reveal(panel);
 }
 
-function notify(kind: PetNote['kind'], title: string, text: string, target?: string) {
+function notify(kind: PetNote['kind'], title: string, text: string, action?: NoteAction) {
   const note: PetNote = { id: ++noteId, kind, title, text };
-  if (target) noteTargets.set(note.id, target);
+  if (action) noteActions.set(note.id, action);
   if (!pet.isDestroyed()) pet.webContents.send(IPC.note, note);
+}
+
+function toPanel(e: TileEvent) {
+  if (!panel.isDestroyed()) panel.webContents.send(IPC.event, e);
+}
+
+/** Ask the manager to summarize a long chat and write the prompt for a fresh one. */
+function handoff(a: Extract<NoteAction, { type: 'handoff' }>) {
+  const project = basename(a.cwd);
+  toPanel({ t: 'user', text: `Handoff for ${project} (~${Math.round(a.tokens / 1000)}k tokens): summary and a fresh-chat prompt` });
+  session.send(handoffPrompt(project, a.cwd, a.tokens, recentTurns(a.transcript)));
+  if (!panel.isVisible()) placePanel();
+  reveal(panel);
+}
+
+function onAlert(a: Alert) {
+  const project = basename(a.cwd);
+  if (a.type === 'waiting-long') {
+    const text = a.reason === 'permission' ? `Still waiting for your permission (${a.minutes} min)` : `Its answer has been waiting for you ${a.minutes} min`;
+    notify('waiting', project, text, { type: 'vscode', folder: a.cwd });
+  } else {
+    const k = Math.round(a.tokens / 1000);
+    notify('long', project, `This chat is at ~${k}k tokens. Click for a summary and a prompt to continue in a fresh chat.`, {
+      type: 'handoff',
+      cwd: a.cwd,
+      transcript: a.transcript,
+      tokens: a.tokens,
+    });
+  }
 }
 
 /** Bring up the VS Code window for a project (falls back to Explorer without the `code` CLI). */
@@ -154,12 +186,14 @@ function openInVSCode(folder: string) {
   child.unref();
 }
 
-function onBridgeEvent(e: BridgeEvent, dir: string) {
+function onBridgeEvent(e: BridgeEvent, dir: string, stoppers: Stoppers) {
   if (!e.cwd || resolve(e.cwd) === resolve(dir)) return; // Sidekick's own session
   const project = basename(e.cwd);
-  if (e.event === 'Stop') notify('done', project, e.last ? summarize(e.last, 140) : 'Answer ready', e.cwd);
+  const open: NoteAction = { type: 'vscode', folder: e.cwd };
+  if (e.event === 'Stop') notify('done', project, e.last ? summarize(e.last, 140) : 'Answer ready', open);
   // idle_prompt repeats a Stop a minute later; only real requests get a bubble.
-  else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', project, e.message ?? 'Needs you', e.cwd);
+  else if (e.event === 'Notification' && e.type !== 'idle_prompt') notify('waiting', project, e.message ?? 'Needs you', open);
+  stoppers.onEvent(e);
 }
 
 /** First lines of a Markdown answer as plain text, for a bubble. */
@@ -187,7 +221,7 @@ function startSession(dir: string) {
   let answer = '';
   session = new Session(
     (e: TileEvent) => {
-      if (!panel.isDestroyed()) panel.webContents.send(IPC.event, e);
+      toPanel(e);
       if (e.t === 'status' && !pet.isDestroyed()) pet.webContents.send(IPC.status, e.status);
       if (e.t === 'status' && e.status === 'thinking') answer = '';
       if (e.t === 'delta') answer += e.text;
@@ -207,6 +241,9 @@ function startSession(dir: string) {
 }
 
 let quitting = false;
+
+// Automated checks get their own profile, so they never collide with (or poke) a running Sidekick.
+if (HIDDEN) app.setPath('userData', join(app.getPath('temp'), 'sidekick-hidden'));
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -230,8 +267,9 @@ else {
     ipcMain.on(IPC.interactive, (_e, on: boolean) => pet.setIgnoreMouseEvents(!on, { forward: true }));
     ipcMain.on(IPC.togglePanel, () => togglePanel());
     ipcMain.on(IPC.openNote, (_e, id: number) => {
-      const target = noteTargets.get(id);
-      if (target) openInVSCode(target);
+      const action = noteActions.get(id);
+      if (action?.type === 'vscode') openInVSCode(action.folder);
+      else if (action?.type === 'handoff') handoff(action);
       else togglePanel();
     });
     ipcMain.on(IPC.petMenu, () =>
@@ -257,7 +295,9 @@ else {
     createPet();
     startSession(dir);
     if (hooksInstalled()) writeHookScript(); // keep the script current after updates
-    tailEvents((e) => onBridgeEvent(e, dir));
+    const stoppers = new Stoppers(loadConfig, onAlert);
+    tailEvents((e) => onBridgeEvent(e, dir, stoppers));
+    setInterval(() => stoppers.tick(), Number(process.env.SIDEKICK_TICK_MS ?? 30_000));
     // Greet once both windows can receive the stream.
     let loaded = 0;
     for (const w of [pet, panel]) w.webContents.once('did-finish-load', () => ++loaded === 2 && session.send(kickoff()));
