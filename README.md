@@ -33,7 +33,13 @@ Sidekick's memory is plain Markdown in `Documents\Sidekick` (the ▤ button open
 
 The agent may read any file but can only write inside this folder.
 
-## Run it
+## Install
+
+`npm run dist` builds `release\Sidekick Setup <version>.exe`, a one-click per-user installer (no admin rights) with Start menu and desktop shortcuts. The installed app starts with Windows by default; untick **Start with Windows** in the octopus menu to stop that. The installer is not code-signed, so SmartScreen will ask you to confirm ("More info" → "Run anyway").
+
+The Claude Code binary that the Agent SDK drives is bundled (unpacked next to `app.asar`), which is why the installer is about 190 MB. You still need to be signed in to Claude Code on the machine.
+
+## Run from source
 
 Requirements: Windows 10/11, Node 20+, and Claude Code signed in on this machine (`claude login`) or `ANTHROPIC_API_KEY` set. Sidekick never reads or stores your credentials: it runs Claude Code through the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) with whatever auth you already have.
 
@@ -41,6 +47,8 @@ Requirements: Windows 10/11, Node 20+, and Claude Code signed in on this machine
 npm install
 npm run dev
 npm test           # stopper logic
+npm run dist       # Windows installer in release/
+npm run icon       # regenerate build/icon.png from the sprite
 ```
 
 | Env var | Default | Meaning |

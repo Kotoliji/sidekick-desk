@@ -1,0 +1,23 @@
+appId: dev.kotoliji.sidekick
+productName: Sidekick
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+# Claude Code ships as a native exe inside the SDK; it must live outside app.asar to be spawned.
+asarUnpack:
+  - node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Sidekick
+  runAfterFinish: true

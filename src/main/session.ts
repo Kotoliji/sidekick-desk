@@ -43,6 +43,8 @@ export interface SessionOptions {
   canUseTool?: CanUseTool;
   /** Extra environment for the Claude Code process (merged over process.env). */
   env?: Record<string, string>;
+  /** Claude Code binary; the SDK finds its own unless the app is packaged. */
+  executable?: string;
 }
 
 const denyAll: CanUseTool = async () => ({ behavior: 'deny', message: 'Tool use is not allowed here. Answer directly.' });
@@ -67,6 +69,7 @@ export class Session {
         systemPrompt: opts.systemPrompt,
         tools: opts.tools,
         env: opts.env && { ...process.env, ...opts.env },
+        pathToClaudeCodeExecutable: opts.executable,
         includePartialMessages: true,
         canUseTool: opts.canUseTool ?? denyAll,
       },

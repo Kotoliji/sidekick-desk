@@ -6,17 +6,15 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/main/stoppers.test.ts"
+    "test": "tsx --test src/main/stoppers.test.ts",
+    "dist": "electron-vite build && electron-builder --win",
+    "icon": "tsx scripts/make-icon.mts"
   },
-  "author": "Mugivara <kirill30082005@gmail.com>",
+  "author": "Kotoliji",
   "license": "MIT",
   "description": "A personal manager agent that lives in a small window on your Windows desktop: daily plan, prompt help, and (soon) alerts from your Claude Code chats.",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.304",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "@anthropic-ai/claude-agent-sdk": "^0.3.304"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
@@ -24,7 +22,12 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.7.0",
     "electron": "^39.8.10",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^6.4.4"

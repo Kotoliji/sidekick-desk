@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, screen, shell, type Rectangle } from 'electron';
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
@@ -217,6 +217,30 @@ function writeOnlyInside(dir: string): CanUseTool {
   };
 }
 
+/**
+ * In the installed app the SDK's Claude Code binary is unpacked next to app.asar
+ * (a process cannot be spawned from inside the archive), so point the SDK at it.
+ */
+function bundledClaude() {
+  if (!app.isPackaged) return undefined;
+  const modules = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@anthropic-ai');
+  const bin = join('claude-agent-sdk-win32-x64', 'claude.exe');
+  // electron-builder may hoist the platform package or nest it under the SDK.
+  return [join(modules, bin), join(modules, 'claude-agent-sdk', 'node_modules', '@anthropic-ai', bin)].find((p) => existsSync(p));
+}
+
+/** Start with Windows: on by default the first time the installed app runs, then the user's choice. */
+function initAutostart() {
+  if (!app.isPackaged || HIDDEN) return;
+  const flag = join(app.getPath('userData'), 'autostart-initialized');
+  try {
+    readFileSync(flag);
+  } catch {
+    app.setLoginItemSettings({ openAtLogin: true });
+    writeFileSync(flag, '1');
+  }
+}
+
 function startSession(dir: string) {
   let answer = '';
   session = new Session(
@@ -236,6 +260,7 @@ function startSession(dir: string) {
       canUseTool: writeOnlyInside(dir),
       // Sidekick's own turns must not come back through the hook as "a chat finished".
       env: { SIDEKICK_SELF: '1' },
+      executable: bundledClaude(),
     },
   );
 }
@@ -255,6 +280,7 @@ else {
 
   app.whenReady().then(() => {
     const dir = ensureWorkspace();
+    initAutostart();
 
     ipcMain.on(IPC.send, (_e, text: string) => typeof text === 'string' && text.trim() && session.send(text));
     ipcMain.on(IPC.interrupt, () => void session.interrupt());
@@ -285,6 +311,13 @@ else {
             setHooks(item.checked);
             notify('sidekick', 'Sidekick', item.checked ? 'Connected: I will tell you when a Claude Code chat finishes or needs you.' : 'Disconnected from Claude Code chats.');
           },
+        },
+        {
+          label: app.isPackaged ? 'Start with Windows' : 'Start with Windows (installed app only)',
+          type: 'checkbox',
+          enabled: app.isPackaged,
+          checked: app.isPackaged && app.getLoginItemSettings().openAtLogin,
+          click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
         },
         { type: 'separator' },
         { label: 'Quit Sidekick', click: () => app.quit() },
