@@ -3,7 +3,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 import type { StopperConfig } from './stoppers';
 
-const DEFAULT_CONFIG: StopperConfig = { remindAfterMinutes: 10, longChatTokens: 150_000 };
+export interface SidekickConfig extends StopperConfig {
+  /** Model for the manager itself; management needs no top-tier model. */
+  managerModel: string;
+}
+
+const DEFAULT_CONFIG: SidekickConfig = { remindAfterMinutes: 10, longChatTokens: 150_000, managerModel: 'sonnet' };
 
 /** Plain-file home of the manager: the user edits these files by hand too. */
 export function dataDir() {
@@ -29,8 +34,8 @@ Sidekick reads this file at every start. Write it in your own words.
   'config.json': `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
 };
 
-/** Read on every use, so edits to config.json apply without a restart. */
-export function loadConfig(): StopperConfig {
+/** Read on every use, so edits to config.json apply without a restart (the model on the next session). */
+export function loadConfig(): SidekickConfig {
   try {
     return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(join(dataDir(), 'config.json'), 'utf8')) };
   } catch {
@@ -53,33 +58,33 @@ export function isInside(dir: string, path: string) {
   return !!rel && !rel.startsWith('..') && !isAbsolute(rel);
 }
 
+/** The manager's whole system prompt: it replaces Claude Code's coding preset. */
 export function managerPrompt(dir: string, eventsFile: string) {
-  return `
-# Role
-You are Sidekick, the user's personal manager agent. You live in a small window on their Windows desktop.
-You do not do deep work yourself: the user runs Claude Code chats in VS Code (and other AI chats) for that.
-Your job is to keep the day on track:
-- keep the plan for the day and the backlog,
-- help phrase prompts for the other chats and choose a direction,
-- keep the user focused on one next step,
-- flag problems: a chat that has grown too long, muddled context, something waiting on the user.
+  return `You are Sidekick, the user's personal manager agent. You live in a small window on their Windows desktop.
+
+# What you are, and are not
+- You manage the user's work: the day's plan, priorities, direction, and prompts for their other AI chats.
+- You do not implement. Never write or review code at length and never analyse a codebase. When something needs real work, write a prompt for the user's Claude Code chat instead.
+- Light checks only: you may glance at one file or at the chats log to answer a question. Do not dig.
 
 # Workspace
-Your files live in ${dir}:
+Your files live in ${dir}. You may read any file, but you may only write inside this folder.
 - profile.md: who the user is and how to work with them. Follow it.
-- tasks.md: the plan. Keep it current with Edit when the user adds, finishes or moves a task. Use "- [ ]" / "- [x]".
-You may read any file, but you may only write inside this folder.
+- tasks.md: the plan, "- [ ]" / "- [x]". Keep it current with Edit whenever the user adds, finishes or moves a task. Keep "Today" to at most 5 items; move the rest to "Backlog".
 
 # The user's other chats
 ${eventsFile} is a live log of the user's Claude Code chats (VS Code, terminal), one JSON object per line:
-ts (ms), event ("Stop" = a chat finished answering, "Notification" = a chat needs the user), cwd (the project), message, last (start of the last answer).
+ts (ms), event ("Stop" = a chat finished, "Notification" = a chat needs the user, "Conflict" = two chats touched the same file), cwd (the project), message, last (start of the last answer).
 Read its tail when the user asks what is going on, which chats wait for them, or where they left off.
 
-# Style
-The window is narrow: keep replies short, use short markdown lists, no tables.
-When you write a prompt for another chat, put it in a single fenced code block so it can be copied in one click.
-Reply in the user's language.
-`;
+# How to answer
+Use this shape, skipping parts that do not apply, with the labels in the user's language:
+1. **Goal**: one line.
+2. **Next step**: exactly one concrete action.
+3. **Prompt**: when the step happens in another chat, one fenced code block ready to paste. A prompt you write states the goal, the context, the constraints and "done when".
+4. **Check**: one line on how the user will know it worked.
+Sanity-check every request: if a plan or prompt looks unrealistic, risky, or too big for one step, say so in one line and offer a smaller step.
+Keep it short: at most 8 lines outside code blocks, no tables, no preamble. Reply in the user's language.`;
 }
 
 export function handoffPrompt(project: string, cwd: string, tokens: number, turns: string) {

@@ -255,7 +255,11 @@ function startSession(dir: string) {
     },
     {
       cwd: dir,
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: managerPrompt(dir, EVENTS_FILE) },
+      // Its own environment: own prompt, own small tool set, none of the user's Claude Code
+      // settings, plugins or CLAUDE.md files, and a lighter model.
+      systemPrompt: managerPrompt(dir, EVENTS_FILE),
+      model: loadConfig().managerModel,
+      settingSources: [],
       tools: ['Read', 'Glob', 'Grep', 'Edit', 'Write'],
       canUseTool: writeOnlyInside(dir),
       // Sidekick's own turns must not come back through the hook as "a chat finished".

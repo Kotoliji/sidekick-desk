@@ -45,6 +45,8 @@ export interface SessionOptions {
   env?: Record<string, string>;
   /** Claude Code binary; the SDK finds its own unless the app is packaged. */
   executable?: string;
+  /** Which of the user's Claude Code settings to load; [] isolates the session from them. */
+  settingSources?: Options['settingSources'];
 }
 
 const denyAll: CanUseTool = async () => ({ behavior: 'deny', message: 'Tool use is not allowed here. Answer directly.' });
@@ -58,6 +60,9 @@ export class Session {
   private q: Query;
   private startedAt = 0;
   private streaming = false;
+  /** Tokens the model saw on its latest call: the size of this session's context. */
+  contextTokens = 0;
+  busy = false;
 
   constructor(private emit: (e: TileEvent) => void, opts: SessionOptions) {
     this.q = query({
@@ -70,6 +75,7 @@ export class Session {
         tools: opts.tools,
         env: opts.env && { ...process.env, ...opts.env },
         pathToClaudeCodeExecutable: opts.executable,
+        settingSources: opts.settingSources,
         includePartialMessages: true,
         canUseTool: opts.canUseTool ?? denyAll,
       },
@@ -80,6 +86,7 @@ export class Session {
   send(text: string) {
     this.startedAt = Date.now();
     this.streaming = false;
+    this.busy = true;
     this.emit({ t: 'status', status: 'thinking' });
     this.inbox.push(text);
   }
@@ -100,6 +107,10 @@ export class Session {
           // Skip subagent output; only the tile's own agent streams into the chat.
           if (m.parent_tool_use_id) continue;
           const ev = m.event;
+          if (ev.type === 'message_start') {
+            const u = ev.message.usage;
+            this.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+          }
           if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
             if (!this.streaming) {
               this.streaming = true;
@@ -113,15 +124,17 @@ export class Session {
           }
         } else if (m.type === 'result') {
           if (m.subtype === 'success') {
-            this.emit({ t: 'done', sessionId: m.session_id, ms: Date.now() - this.startedAt, costUsd: m.total_cost_usd });
+            this.emit({ t: 'done', sessionId: m.session_id, ms: Date.now() - this.startedAt, costUsd: m.total_cost_usd, contextTokens: this.contextTokens });
           } else {
             this.emit({ t: 'error', message: `Claude stopped: ${m.subtype}` });
           }
+          this.busy = false;
           this.emit({ t: 'status', status: 'idle' });
         }
       }
     } catch (err) {
       this.emit({ t: 'error', message: err instanceof Error ? err.message : String(err) });
+      this.busy = false;
       this.emit({ t: 'status', status: 'error' });
     }
   }

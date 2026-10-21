@@ -7,7 +7,7 @@ export type TileEvent =
   | { t: 'status'; status: TileStatus }
   | { t: 'delta'; text: string }
   | { t: 'tool'; name: string }
-  | { t: 'done'; sessionId: string; ms: number; costUsd?: number }
+  | { t: 'done'; sessionId: string; ms: number; costUsd?: number; contextTokens?: number }
   | { t: 'error'; message: string }
   /** A request Sidekick sent on the user's behalf (e.g. a handoff), shown as a user message. */
   | { t: 'user'; text: string };
