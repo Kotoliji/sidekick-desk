@@ -24,6 +24,8 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 
 Right-click the octopus → **Connect Claude Code chats**. This adds hook entries (`Stop`, `Notification`, `UserPromptSubmit`, and `PreToolUse`/`PostToolUse` for file-editing tools only) to `~/.claude/settings.json`, keeping a backup at `settings.json.sidekick-backup`, and leaves the rest of the file untouched. Unticking it removes them. New chats pick it up; reload VS Code windows that were already open.
 
+The first time you click a card, VS Code asks whether the Claude Code (or Codex) extension may open the link. Tick **Do not ask me again for this extension** and click **Open**. With several VS Code windows open, Sidekick works out which window has the chat's folder (from VS Code's own logs) and sends the link there.
+
 The hook is a tiny dependency-free script, `~/.sidekick/hook.cjs`, that appends one JSON line per event to `~/.sidekick/events.jsonl` and keeps file claims in `~/.sidekick/locks.json`. Sidekick tails that file, so the hook never blocks Claude Code and events are not lost while Sidekick is closed. The manager agent can read the same log when you ask it what is going on.
 
 ## Your files

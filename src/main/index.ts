@@ -9,6 +9,7 @@ import { Session } from './session';
 import { Stoppers, type Alert, type ChatRef } from './stoppers';
 import { recentTurns, sessionInfo, type SessionInfo } from './transcript';
 import { codexSessionInfo, watchCodex } from './codex';
+import { vscodeWindowId } from './vscode';
 import { dayKey, ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt, resumeKickoff, wrapUpPrompt } from './workspace';
 import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
 
@@ -220,10 +221,13 @@ function onAlert(a: Alert) {
   }
 }
 
-/** Deep links the assistants' VS Code extensions handle: open (or bring forward) one chat as a tab. */
+/**
+ * Deep links the assistants' VS Code extensions handle: open (or bring forward) one chat as a tab.
+ * `windowId` makes VS Code deliver the link to that window instead of the last active one.
+ */
 const TAB_URI = {
-  claude: (id: string) => `vscode://anthropic.claude-code/open?session=${encodeURIComponent(id)}`,
-  codex: (id: string) => `vscode://openai.chatgpt/local/${encodeURIComponent(id)}`,
+  claude: (id: string, win?: number) => `vscode://anthropic.claude-code/open?session=${encodeURIComponent(id)}${win ? `&windowId=${win}` : ''}`,
+  codex: (id: string, win?: number) => `vscode://openai.chatgpt/local/${encodeURIComponent(id)}${win ? `?windowId=${win}` : ''}`,
 };
 
 /**
@@ -231,7 +235,7 @@ const TAB_URI = {
  * (or opens one if it was closed); the extension link then shows that chat's tab in it.
  */
 function openChat(t: ChatTarget) {
-  const uri = t.session && TAB_URI[t.agent](t.session);
+  const uri = t.session && TAB_URI[t.agent](t.session, vscodeWindowId(t.folder));
   if (HIDDEN) return console.log(`[hidden] open in VS Code ${t.folder}${uri ? ` then ${uri}` : ''}`);
   const child = spawn('code', [`"${t.folder}"`], { shell: true, detached: true, stdio: 'ignore', windowsHide: true });
   child.on('exit', (code) => {
