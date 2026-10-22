@@ -7,7 +7,7 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 ## What it does today
 
 - The octopus floats above your windows; clicks pass through everywhere except the octopus itself.
-- Drag it anywhere (it remembers the spot), click to open the chat, right-click for the menu (open chat, tasks folder, quit).
+- Drag it anywhere (it remembers the spot), click to open or close the chat, press and hold to pet it, right-click for the menu (open chat, tasks folder, quit).
 - Greets you with the date at start, reads your profile and today's tasks, and asks for the plan.
 - When an answer lands while the chat is closed, it shows up as a speech bubble; click the bubble to open the chat.
 - Every bubble about your chats is also kept as a card in the Sidekick chat, and the manager is told about them with your next message, so you can ask it "what happened?". Click a card to jump to that chat: Sidekick focuses the VS Code window it was opened in and opens its tab (reopening it if closed).

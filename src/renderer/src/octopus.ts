@@ -41,6 +41,20 @@ const FACE = [
   '.opppppppppppppppdo.',
 ];
 
+// Pressed and held: "^ ^" eyes and an open smile.
+const EYES_HAPPY = [
+  '.opppkppppppppkpppo.',
+  '.oppkpkppppppkpkppo.',
+  '.oppppppppppppppppo.',
+];
+
+const FACE_HAPPY = [
+  '.opccpppkkkkpppccpo.',
+  '.oppppppkcckpppppdo.',
+  '.opppppppkkppppppdo.',
+  '.opppppppppppppppdo.',
+];
+
 // Two tentacle poses; alternating them makes the octopus "swim".
 const LEGS_A = [
   '..oppoppoppoppoppo..',
@@ -61,6 +75,10 @@ const LEGS_B = [
 export const SPRITE_W = 20;
 export const SPRITE_H = 18;
 
-export function frame(opts: { blink: boolean; legs: 'a' | 'b' }) {
-  return [...HEAD, ...(opts.blink ? EYES_CLOSED : EYES_OPEN), ...FACE, ...(opts.legs === 'a' ? LEGS_A : LEGS_B)];
+export function frame(opts: { blink: boolean; legs: 'a' | 'b'; happy?: boolean }) {
+  const eyes = opts.happy ? EYES_HAPPY : opts.blink ? EYES_CLOSED : EYES_OPEN;
+  return [...HEAD, ...eyes, ...(opts.happy ? FACE_HAPPY : FACE), ...(opts.legs === 'a' ? LEGS_A : LEGS_B)];
 }
+
+/** A tiny pixel heart for the happy animation. */
+export const HEART = ['.x.x.', 'xxxxx', '.xxx.', '..x..'];

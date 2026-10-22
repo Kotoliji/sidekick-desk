@@ -114,6 +114,7 @@ function createPanel() {
     webPreferences: webPreferences(),
   });
   load(panel, 'panel');
+  panel.on('blur', () => (panelBlurAt = Date.now()));
   panel.on('close', (e) => {
     // Closing the panel only tucks it away; quitting goes through the pet's menu.
     if (!quitting) {
@@ -140,8 +141,13 @@ function placePanel() {
   } satisfies Rectangle);
 }
 
+/** When the panel last lost focus: clicking the octopus takes focus a moment before the click arrives. */
+let panelBlurAt = 0;
+
+/** Open the chat, or close it if it is open and in use (or was until this very click). */
 function togglePanel() {
-  if (panel.isVisible() && panel.isFocused()) return panel.hide();
+  const inUse = panel.isFocused() || Date.now() - panelBlurAt < 600;
+  if (panel.isVisible() && inUse) return panel.hide();
   if (!panel.isVisible()) placePanel();
   reveal(panel);
 }
