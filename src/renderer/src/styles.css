@@ -764,6 +764,64 @@ button {
   color: #c81e1e;
 }
 
+.bubble[data-kind='ask'] .bubble-title {
+  color: #2563eb;
+}
+
+/* Still using / Done: in the bubble (cream) and on the chat card (theme). */
+.ask-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bubble .ask-actions {
+  margin: -2px 12px 10px;
+}
+
+.ask-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 600 11px/1.2 'Geist', system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.bubble .ask-btn {
+  border: 2px solid #2b1b2e;
+  background: #fff;
+  color: #2b1b2e;
+}
+
+.bubble .ask-done {
+  background: #2b1b2e;
+  color: #fff7f0;
+}
+
+.activity .ask-btn {
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.activity .ask-done {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ask-answer {
+  margin-top: 4px;
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+
+.ask-answer::before {
+  content: '→ ';
+}
+
+.activity[data-kind='ask'] {
+  --activity: #60a5fa;
+}
+
 .bubble-more {
   padding: 0 5px;
   border-radius: 999px;

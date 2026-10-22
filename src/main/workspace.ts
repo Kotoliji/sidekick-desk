@@ -16,6 +16,7 @@ export interface SidekickConfig extends StopperConfig {
 
 const DEFAULT_CONFIG: SidekickConfig = {
   remindAfterMinutes: 10,
+  askAfterMinutes: 30,
   longChatTokens: 100_000,
   managerModel: 'sonnet',
   managerContextLimit: 40_000,

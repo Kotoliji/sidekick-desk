@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { PetNote, TileStatus } from '../../shared/protocol';
-import { NOTE_ICON } from './notes';
+import { AskButtons, NOTE_ICON } from './notes';
 import { frame, HEART, PALETTE, SPRITE_H, SPRITE_W } from './octopus';
 
 // A chat waiting on the user matters more than a finished answer, so it stays up longer.
-const NOTE_MS = { sidekick: 9000, done: 12000, waiting: 30000, long: 30000, conflict: 45000 } as const;
+// A question waits for an answer for a while; it also stays on its card in the chat.
+const NOTE_MS = { sidekick: 9000, done: 12000, waiting: 30000, long: 30000, conflict: 45000, ask: 300000 } as const;
 const DRAG_THRESHOLD = 3;
 /** Pressing this long without moving is a hold (the octopus is petted), not a click. */
 const HOLD_MS = 280;
@@ -74,6 +75,8 @@ export function Pet() {
       }),
     [],
   );
+  // A question answered on its card in the chat.
+  useEffect(() => window.sidekick.onDismiss((id) => setNotes((q) => q.filter((n) => n.id !== id))), []);
 
   // Each bubble lingers, then makes room for the next.
   const current = notes[0];
@@ -157,6 +160,7 @@ export function Pet() {
             </span>
             <span className="bubble-text">{current.text}</span>
           </button>
+          {current.kind === 'ask' && <AskButtons id={current.id} onAnswer={() => setNotes((q) => q.slice(1))} />}
         </div>
       )}
 

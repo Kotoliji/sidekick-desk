@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from 'react';
-import type { PetNote, SidekickApi, TileEvent, TileStatus } from '../../shared/protocol';
+import type { AskChoice, PetNote, SidekickApi, TileEvent, TileStatus } from '../../shared/protocol';
 
 declare global {
   interface Window {
@@ -8,7 +8,7 @@ declare global {
 }
 
 export type Part = { kind: 'text'; text: string } | { kind: 'tool'; name: string };
-export type Message = { role: 'user' | 'assistant' | 'notice'; parts: Part[] } | { role: 'activity'; note: PetNote };
+export type Message = { role: 'user' | 'assistant' | 'notice'; parts: Part[] } | { role: 'activity'; note: PetNote; answer?: AskChoice };
 
 export interface TileState {
   title: string;
@@ -52,6 +52,8 @@ function reducer(tile: TileState, action: Action): TileState {
       return { ...tile, messages: [...tile.messages, { role: 'notice', parts: [{ kind: 'text', text: e.text }] }] };
     case 'activity':
       return { ...tile, messages: [...tile.messages, { role: 'activity', note: e.note }] };
+    case 'answered':
+      return { ...tile, messages: tile.messages.map((m) => (m.role === 'activity' && m.note.id === e.id ? { ...m, answer: e.choice } : m)) };
   }
 }
 

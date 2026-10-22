@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { TileState } from './chat';
-import { NOTE_HINT, NOTE_ICON } from './notes';
+import { ASK_LABEL, AskButtons, NOTE_HINT, NOTE_ICON } from './notes';
 
 const STATUS_LABEL = { idle: 'ready', thinking: 'thinking', streaming: 'writing', error: 'error' } as const;
 
@@ -82,13 +82,27 @@ export function ChatPanel({ tile, subtitle, onSend, onInterrupt, actions }: Prop
       <div className="tile-log" ref={log}>
         {tile.messages.map((m, i) =>
           m.role === 'activity' ? (
-            <button key={i} className="activity" data-kind={m.note.kind} onClick={() => window.sidekick.openNote(m.note.id)} title={NOTE_HINT[m.note.kind]}>
+            <div
+              key={i}
+              role="button"
+              tabIndex={0}
+              className="activity"
+              data-kind={m.note.kind}
+              onClick={() => window.sidekick.openNote(m.note.id)}
+              title={NOTE_HINT[m.note.kind]}
+            >
               <span className="activity-title">
                 {NOTE_ICON[m.note.kind]}
                 {m.note.title}
               </span>
               <span className="activity-text">{m.note.text}</span>
-            </button>
+              {m.note.kind === 'ask' &&
+                (m.answer ? (
+                  <span className="ask-answer">{ASK_LABEL[m.answer]}</span>
+                ) : (
+                  <AskButtons id={m.note.id} />
+                ))}
+            </div>
           ) : (
           <div key={i} className={`msg msg-${m.role}`}>
             {m.parts.map((p, j) =>

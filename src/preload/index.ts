@@ -20,6 +20,8 @@ const api: SidekickApi = {
   togglePanel: () => ipcRenderer.send(IPC.togglePanel),
   showPanel: () => ipcRenderer.send(IPC.showPanel),
   openNote: (id) => ipcRenderer.send(IPC.openNote, id),
+  answerNote: (id, choice) => ipcRenderer.send(IPC.answerNote, id, choice),
+  onDismiss: (cb) => subscribe(IPC.dismissNote, cb),
   petMenu: () => ipcRenderer.send(IPC.petMenu),
 };
 

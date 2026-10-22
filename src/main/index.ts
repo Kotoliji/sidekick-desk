@@ -11,7 +11,7 @@ import { recentTurns, sessionInfo, type SessionInfo } from './transcript';
 import { codexSessionInfo, watchCodex } from './codex';
 import { vscodeWindowId } from './vscode';
 import { dayKey, ensureWorkspace, handoffPrompt, isInside, kickoff, loadConfig, managerPrompt, resumeKickoff, wrapUpPrompt } from './workspace';
-import { IPC, type PetNote, type TileEvent } from '../shared/protocol';
+import { IPC, type AskChoice, type PetNote, type TileEvent } from '../shared/protocol';
 
 // The pet window is mostly transparent: the octopus sits in its bottom-right
 // corner and speech bubbles grow up and to the left of it.
@@ -155,7 +155,9 @@ function togglePanel() {
 
 /** Chat activity the manager has not been told about yet; it rides along with the user's next message. */
 const unseen: string[] = [];
-const ACTIVITY_LABEL = { done: 'finished', waiting: 'waiting', long: 'long chat', conflict: 'file conflict' } as const;
+const ACTIVITY_LABEL = { done: 'finished', waiting: 'waiting', long: 'long chat', conflict: 'file conflict', ask: 'idle' } as const;
+/** Open "still using this chat?" questions: note id → the chat it is about. */
+const asks = new Map<number, { session: string; label: string }>();
 
 function notify(kind: PetNote['kind'], title: string, text: string, action?: NoteAction) {
   const note: PetNote = { id: ++noteId, kind, title, text };
@@ -167,6 +169,19 @@ function notify(kind: PetNote['kind'], title: string, text: string, action?: Not
     unseen.push(`- ${title} (${ACTIVITY_LABEL[kind]}): ${text}`);
     if (unseen.length > 12) unseen.shift();
   }
+  return note.id;
+}
+
+/** The user answered "still using this chat, or done?" in a bubble or on a card. */
+function answerAsk(id: number, choice: AskChoice, stoppers: Stoppers) {
+  const ask = asks.get(id);
+  if (!ask) return;
+  asks.delete(id);
+  stoppers.answer(ask.session, choice);
+  toPanel({ t: 'answered', id, choice });
+  if (!pet.isDestroyed()) pet.webContents.send(IPC.dismissNote, id);
+  // The manager hears it with the user's next message, and can tick off the work.
+  unseen.push(`- ${ask.label} (idle chat): the user says ${choice === 'done' ? 'they are DONE with this chat' : 'they are still using this chat'}`);
 }
 
 /** The user's message, prefixed with what happened in their chats since they last wrote. */
@@ -207,7 +222,10 @@ function locate(ref: ChatRef): { label: string; target: ChatTarget } {
 
 function onAlert(a: Alert) {
   const { label, target } = locate(a);
-  if (a.type === 'waiting-long') {
+  if (a.type === 'idle-ask') {
+    const id = notify('ask', label, `Idle for ${a.minutes} min. Still using this chat, or done with it?`, target);
+    asks.set(id, { session: a.session, label });
+  } else if (a.type === 'waiting-long') {
     const text = a.reason === 'permission' ? `Still waiting for your permission (${a.minutes} min)` : `Its answer has been waiting for you ${a.minutes} min`;
     notify('waiting', label, text, target);
   } else {
@@ -451,6 +469,7 @@ else {
     startSession(dir);
     if (hooksInstalled()) writeHookScript(); // keep the script current after updates
     const stoppers = new Stoppers(loadConfig, onAlert);
+    ipcMain.on(IPC.answerNote, (_e, id: number, choice: AskChoice) => (choice === 'keep' || choice === 'done') && answerAsk(id, choice, stoppers));
     const syncGuard = () => {
       const c = loadConfig();
       writeGuardSettings({ mode: c.fileGuard, minutes: c.fileGuardMinutes });

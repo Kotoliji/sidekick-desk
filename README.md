@@ -15,7 +15,7 @@ A pixel-art octopus that floats on your Windows desktop and manages your day. Yo
 - Writes prompts for your other chats as code blocks with a one-click copy button.
 - Watches your Claude Code and Codex (OpenAI) chats, in VS Code or the terminal, several per project if you like: a green bubble when one finishes, a yellow one when a Claude chat needs your permission. Labels read "PROJECT · tab title".
 - Codex is followed read-only through its session files (`~/.codex/sessions`), with no change to its config. Its file edits are recorded for the file guard, so a Claude chat is stopped before touching a file Codex just edited; Codex itself has no pre-edit hook, so its own clashes are reported after the fact.
-- Stoppers: a reminder when a chat has waited for you 10 minutes (writing in that chat cancels it), and a purple bubble when a chat's conversation has grown by 100k tokens (its fixed starting size, which depends on your tools and MCP servers, is left out). Click that one and Sidekick reads the end of the chat and writes a short summary plus a prompt to continue in a fresh chat.
+- Stoppers: a reminder when a chat has waited for you 10 minutes (writing in that chat cancels it); after 30 idle minutes the octopus asks whether you are still using the chat or done with it (**Done** silences it until it is active again and tells the manager; **Still using** asks again later); and a purple bubble when a chat's conversation has grown by 100k tokens (its fixed starting size, which depends on your tools and MCP servers, is left out). Click that one and Sidekick reads the end of the chat and writes a short summary plus a prompt to continue in a fresh chat.
 - File guard: when a chat is about to edit a file that a different chat edited in the last 20 minutes, the edit is stopped and Claude Code asks you first (or refuses outright, if you prefer); a red bubble tells you which chats collided. Edits made through shell commands are not covered.
 - A manager, not a coder: it runs in its own environment (own prompt, no plugins or CLAUDE.md, a lighter model) and answers as goal → one next step → a ready prompt → how to check. It turns implementation requests into prompts for your Claude Code chats and flags plans that are too big for a day.
 - Memory in files, not in context: when its context passes a limit, at a new day, or on **Wrap up now**, it writes 3-5 lines to `journal/` and a "Tomorrow" list to `tasks.md`, then starts fresh from those files.
@@ -37,7 +37,7 @@ Sidekick's memory is plain Markdown in `Documents\Sidekick` (the ▤ button open
 | `profile.md` | Who you are and how you like to be helped. Read at every start. |
 | `tasks.md` | Today's plan and the backlog, as `- [ ]` checkboxes. |
 | `journal/YYYY-MM-DD.md` | The manager's short notes, written before each context reset. |
-| `config.json` | Settings, applied without a restart (the model on the next session): `remindAfterMinutes` (10), `longChatTokens` (100000), `managerModel` ("sonnet"), `managerContextLimit` (40000), `fileGuard` ("ask", "deny" or "off"), `fileGuardMinutes` (20). |
+| `config.json` | Settings, applied without a restart (the model on the next session): `remindAfterMinutes` (10), `askAfterMinutes` (30), `longChatTokens` (100000), `managerModel` ("sonnet"), `managerContextLimit` (40000), `fileGuard` ("ask", "deny" or "off"), `fileGuardMinutes` (20). |
 
 The agent may read any file but can only write inside this folder.
 

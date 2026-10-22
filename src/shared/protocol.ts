@@ -14,12 +14,18 @@ export type TileEvent =
   /** A quiet system line in the chat (e.g. the context was refreshed). */
   | { t: 'notice'; text: string }
   /** A copy of a bubble about the user's Claude Code chats, kept in the chat as a card. */
-  | { t: 'activity'; note: PetNote };
+  | { t: 'activity'; note: PetNote }
+  /** The user answered an `ask` note (in the bubble or on its card). */
+  | { t: 'answered'; id: number; choice: AskChoice };
+
+/** Answers to "still using this chat, or done with it?". */
+export type AskChoice = 'keep' | 'done';
 
 /** Main → pet: a speech bubble. All kinds but `sidekick` come from Claude Code chats. */
 export interface PetNote {
   id: number;
-  kind: 'sidekick' | 'done' | 'waiting' | 'long' | 'conflict';
+  /** `ask` carries a question with Still using / Done buttons. */
+  kind: 'sidekick' | 'done' | 'waiting' | 'long' | 'conflict' | 'ask';
   title: string;
   text: string;
 }
@@ -42,6 +48,9 @@ export interface SidekickApi {
   showPanel(): void;
   /** The user clicked a bubble: open what it is about. */
   openNote(id: number): void;
+  answerNote(id: number, choice: AskChoice): void;
+  /** Main → pet: drop a bubble that was answered elsewhere. */
+  onDismiss(cb: (id: number) => void): () => void;
   petMenu(): void;
 }
 
@@ -58,5 +67,7 @@ export const IPC = {
   togglePanel: 'pet:toggle-panel',
   showPanel: 'pet:show-panel',
   openNote: 'pet:open-note',
+  answerNote: 'note:answer',
+  dismissNote: 'pet:dismiss-note',
   petMenu: 'pet:menu',
 } as const;
