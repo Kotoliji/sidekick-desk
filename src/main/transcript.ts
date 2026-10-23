@@ -42,6 +42,8 @@ export interface SessionInfo {
   root?: string;
   /** Started from the VS Code extension (so it can be reopened there as a tab). */
   inVSCode: boolean;
+  /** Runs in the Codex desktop app (opened with a codex:// link instead of VS Code). */
+  desktop?: boolean;
   /** The chat's tab title (Claude Code's generated title). */
   title?: string;
 }

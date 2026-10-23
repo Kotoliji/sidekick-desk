@@ -1,6 +1,6 @@
 {
   "name": "sidekick-desk",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

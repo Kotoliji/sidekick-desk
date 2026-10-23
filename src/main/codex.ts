@@ -21,7 +21,6 @@ interface Rollout {
     id?: string;
     cwd?: string;
     originator?: string;
-    source?: unknown;
     last_agent_message?: string;
     name?: string;
     input?: string;
@@ -137,7 +136,10 @@ export function watchCodex(emit: (e: BridgeEvent) => void) {
 export function codexSessionInfo(path: string): SessionInfo {
   try {
     const meta = parse(readFrom(path, 0, Math.min(statSync(path).size, 64_000)).split('\n')[0])?.payload ?? {};
-    const inVSCode = meta.originator === 'codex_vscode' || meta.source === 'vscode';
+    // Trust the originator: desktop-app sessions also carry source "vscode".
+    const originator = String(meta.originator ?? '');
+    const desktop = /desktop/i.test(originator);
+    const inVSCode = originator === 'codex_vscode';
     let title: string | undefined;
     const index = join(CODEX_HOME, 'session_index.jsonl');
     if (meta.id && existsSync(index)) {
@@ -146,7 +148,7 @@ export function codexSessionInfo(path: string): SessionInfo {
         if (e?.id === meta.id && e.thread_name) title = e.thread_name; // the latest rename wins
       }
     }
-    return { root: meta.cwd, inVSCode, title };
+    return { root: meta.cwd, inVSCode, desktop, title };
   } catch {
     return { inVSCode: false };
   }

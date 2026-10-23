@@ -68,7 +68,7 @@ let session: Session;
 let noteId = 0;
 /** What clicking a bubble does, for bubbles that are about a Claude Code chat. */
 /** A chat's home: the VS Code window (by the folder it was opened on) and, when known, its tab. */
-type ChatTarget = { type: 'chat'; agent: ChatRef['agent']; folder: string; session?: string };
+type ChatTarget = { type: 'chat'; agent: ChatRef['agent']; folder: string; session?: string; app?: 'vscode' | 'codex-desktop' };
 type NoteAction = ChatTarget | { type: 'handoff'; cwd: string; transcript: string; tokens: number };
 const noteActions = new Map<number, NoteAction>();
 
@@ -213,11 +213,12 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
 function locate(ref: ChatRef): { label: string; target: ChatTarget } {
   const info: SessionInfo = !ref.transcript ? { inVSCode: false } : ref.agent === 'codex' ? codexSessionInfo(ref.transcript) : sessionInfo(ref.transcript);
   const root = info.root ?? ref.cwd;
-  const tab = [ref.agent === 'codex' && 'Codex', info.title && clip(info.title, 32)].filter(Boolean).join(': ');
-  return {
-    label: tab ? `${basename(root)} · ${tab}` : basename(root),
-    target: { type: 'chat', agent: ref.agent, folder: root, session: info.inVSCode ? ref.session : undefined },
-  };
+  const where = ref.agent === 'codex' && (info.desktop ? 'Codex app' : 'Codex');
+  const tab = [where, info.title && clip(info.title, 32)].filter(Boolean).join(': ');
+  const target: ChatTarget = info.desktop
+    ? { type: 'chat', agent: ref.agent, folder: root, session: ref.session, app: 'codex-desktop' }
+    : { type: 'chat', agent: ref.agent, folder: root, session: info.inVSCode ? ref.session : undefined, app: 'vscode' };
+  return { label: tab ? `${basename(root)} · ${tab}` : basename(root), target };
 }
 
 function onAlert(a: Alert) {
@@ -253,6 +254,12 @@ const TAB_URI = {
  * (or opens one if it was closed); the extension link then shows that chat's tab in it.
  */
 function openChat(t: ChatTarget) {
+  // The Codex desktop app opens (and brings forward) a thread from its own link.
+  if (t.app === 'codex-desktop' && t.session) {
+    const link = `codex://threads/${encodeURIComponent(t.session)}`;
+    if (HIDDEN) return console.log(`[hidden] open ${link}`);
+    return void shell.openExternal(link);
+  }
   const uri = t.session && TAB_URI[t.agent](t.session, vscodeWindowId(t.folder));
   if (HIDDEN) return console.log(`[hidden] open in VS Code ${t.folder}${uri ? ` then ${uri}` : ''}`);
   const child = spawn('code', [`"${t.folder}"`], { shell: true, detached: true, stdio: 'ignore', windowsHide: true });
